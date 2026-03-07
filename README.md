@@ -31,12 +31,6 @@ Download videos and audio from **YouTube**, **SoundCloud**, **X (Twitter)**, **I
 
 ---
 
-## 📸 Screenshots
-
-> *(Add your screenshots here)*
-
----
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -45,46 +39,6 @@ Download videos and audio from **YouTube**, **SoundCloud**, **X (Twitter)**, **I
   - Windows: check **"Add Python to PATH"** during install
 
 Everything else (yt-dlp, Pillow, ffmpeg) installs automatically on first launch.
-
----
-
-### 🪟 Windows
-
-Double-click **`run_windows.bat`**
-
-> No Python? The script opens the download page for you automatically.
-
----
-
-### 🍎 macOS
-
-```bash
-# Make executable once
-chmod +x run_macos.command
-
-# Then double-click run_macos.command
-# — or run from terminal:
-./run_macos.command
-```
-
----
-
-### 🐧 Linux
-
-```bash
-# Make executable once
-chmod +x run_linux.sh
-
-# Run
-./run_linux.sh
-```
-
-**Optional — add to your app menu:**
-
-```bash
-# Edit Oxygen.desktop first: replace /PATH/TO/ with your actual folder path
-cp Oxygen.desktop ~/.local/share/applications/
-```
 
 ---
 
