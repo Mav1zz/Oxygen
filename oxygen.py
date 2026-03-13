@@ -1,11 +1,12 @@
 """
-Oxygen – Multi-platform media downloader
+Oxygen – Multi-platform media downloader  v2.0
 Supports: YouTube · SoundCloud · X (Twitter) · Instagram · and 1000+ more via yt-dlp
+New: Playlist download · Responsive UI · About screen · Drag & Drop
 """
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-import threading, subprocess, sys, os, json, shutil, platform, re, time
+import threading, subprocess, sys, os, json, shutil, platform, re, time, webbrowser
 import configparser
 
 # ─── cross-platform font ──────────────────────────────────────────────────────
@@ -29,7 +30,11 @@ def FM(size):
     return (_FONT_M, size)
 
 # ─── paths ────────────────────────────────────────────────────────────────────
-BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
+# When running as a PyInstaller bundle, data files are in sys._MEIPASS
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    BASE_DIR = sys._MEIPASS
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CFG_PATH  = os.path.join(os.path.expanduser("~"), ".oxygen_cfg.json")
 ICON_PATH = os.path.join(BASE_DIR, "oxygen.ico")
 LOGO_PNG  = os.path.join(BASE_DIR, "oxygen.png")   # user-supplied PNG logo
@@ -78,6 +83,22 @@ BUILTIN_EN = {
     "pkg_ffmpeg_ok":            "✓ ffmpeg ready",
     "pkg_ffmpeg_fail":          "⚠ ffmpeg auto-install failed – please install manually",
     "settings_saved_log":       "⚙ settings saved",
+    # ── playlist ──
+    "playlist_toggle":          "📂  playlist",
+    "playlist_on":              "playlist mode ON – full list will be downloaded",
+    "playlist_off":             "playlist mode OFF – single video only",
+    "playlist_progress":        "⬇ downloading item {current}/{total}: {title}",
+    "playlist_done":            "✓  playlist complete – {count} items downloaded",
+    # ── about ──
+    "about_title":              "About",
+    "about_version":            "v2.0",
+    "about_desc":               "Multi-platform media downloader\npowered by yt-dlp",
+    "about_github":             "GitHub",
+    "about_youtube":            "YouTube",
+    "about_close":              "✕  close",
+    "about_made_by":            "made by maviz",
+    # ── drag & drop ──
+    "drop_hint":                "or drag & drop a link here",
 }
 
 def load_lang(code: str) -> dict:
@@ -332,6 +353,10 @@ class Oxygen(tk.Tk):
         ("#0891b2","Cyan"),   ("#ffffff","White"),
     ]
 
+    # ── social links (edit these to your own) ────────────────────────────────
+    SOCIAL_GITHUB  = "https://github.com/Mav1zz"
+    SOCIAL_YOUTUBE = "https://youtube.com/@Mav1zz"
+
     def __init__(self):
         super().__init__()
         self.cfg        = load_cfg()
@@ -339,25 +364,29 @@ class Oxygen(tk.Tk):
         self._pal       = PALETTES[self.cfg.get("app_theme","oled")]
 
         self.title(self.tr["title"])
-        self.resizable(False, False)
+        self.resizable(True, True)
 
-        self._W, self._H = 640, 530
+        self._W, self._H = 640, 560
+        self._MIN_W, self._MIN_H = 480, 420
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         self.geometry(f"{self._W}x{self._H}+{(sw-self._W)//2}+{(sh-self._H)//2}")
+        self.minsize(self._MIN_W, self._MIN_H)
         self.configure(bg=self._pal["BG"])
 
         # set window icon
         set_window_icon(self)
 
-        self.mode       = tk.StringVar(value="auto")
-        self.url_var    = tk.StringVar()
-        self._dl_thread = None
-        self._last_clip = ""
-        self._last_file = None
-        self._status    = "idle"
-        self._logo_img  = None
+        self.mode         = tk.StringVar(value="auto")
+        self.url_var      = tk.StringVar()
+        self._dl_thread   = None
+        self._last_clip   = ""
+        self._last_file   = None
+        self._status      = "idle"
+        self._logo_img    = None
+        self._playlist_on = False
 
         self._build_ui()
+        self._setup_drag_drop()
         self._start_clip_watcher()
         self.after(300, lambda: threading.Thread(
             target=ensure_deps, args=(self._log, self.tr), daemon=True).start())
@@ -405,6 +434,14 @@ class Oxygen(tk.Tk):
             relief="flat", bd=0, cursor="hand2",
             command=self._open_settings)
         self._gear_btn.pack(side="right")
+
+        self._about_btn = tk.Button(
+            self._top_frame, text="ℹ", font=F(14),
+            bg=P["BG"], fg=P["MUTED"],
+            activebackground=P["BG"], activeforeground=P["FG"],
+            relief="flat", bd=0, cursor="hand2",
+            command=self._open_about)
+        self._about_btn.pack(side="right", padx=(0, 4))
 
         # ── logo container (fixed position, never repacked) ──────────────────
         self._logo_frame = tk.Frame(self, bg=P["BG"])
@@ -463,6 +500,16 @@ class Oxygen(tk.Tk):
             b.pack(side="left")
             self._mbtn[val] = b
         self._set_mode("auto")
+
+        # ── playlist toggle button ────────────────────────────────────────────
+        self._playlist_btn = tk.Button(self._ctrl_frame, text=tr["playlist_toggle"],
+            font=F(9, "bold"),
+            bg=P["BTN"], fg=P["MUTED"],
+            activebackground=P["INPUT"], activeforeground=P["FG"],
+            relief="flat", bd=0, padx=12, pady=7,
+            highlightbackground=P["BORDER"], highlightthickness=1,
+            cursor="hand2", command=self._toggle_playlist)
+        self._playlist_btn.pack(side="left", padx=(8, 0))
 
         self._paste_btn = tk.Button(self._ctrl_frame, text=tr["btn_paste"],
             font=F(9, "bold"),
@@ -572,6 +619,38 @@ class Oxygen(tk.Tk):
             else:
                 b.config(bg=P["BTN"], fg=P["MUTED"])
 
+    # ── playlist toggle ──────────────────────────────────────────────────────
+    def _toggle_playlist(self):
+        self._playlist_on = not self._playlist_on
+        P = self.P
+        if self._playlist_on:
+            self._playlist_btn.config(bg=self.ACC_BG, fg=P["FG"])
+            self._log(self.tr["playlist_on"])
+        else:
+            self._playlist_btn.config(bg=P["BTN"], fg=P["MUTED"])
+            self._log(self.tr["playlist_off"])
+
+    # ── drag & drop support ──────────────────────────────────────────────────
+    def _setup_drag_drop(self):
+        """Enable drag-and-drop of text/URLs onto the URL entry field."""
+        try:
+            # Bind to the top-level window
+            self.bind("<Button-2>", self._handle_middle_click_paste)
+            # Keyboard shortcut: Ctrl+V also triggers a paste check
+            self.url_entry.bind("<Control-v>", self._handle_keyboard_paste)
+        except Exception:
+            pass
+
+    def _handle_middle_click_paste(self, event=None):
+        """Handle middle-click paste (common on Linux)."""
+        self._paste_url()
+
+    def _handle_keyboard_paste(self, event=None):
+        """After Ctrl+V, clear the placeholder if active."""
+        if getattr(self, "_placeholder_active", False):
+            self._on_focus_in()
+        return None  # let the default paste happen
+
     # ── clipboard watcher ────────────────────────────────────────────────────
     def _start_clip_watcher(self):
         def watch():
@@ -644,6 +723,7 @@ class Oxygen(tk.Tk):
         try:
             import yt_dlp
             saved = []
+            playlist_count = [0, 0]  # [current, total]
 
             def hook(d):
                 if d.get("status") == "downloading":
@@ -660,7 +740,32 @@ class Oxygen(tk.Tk):
                 "outtmpl": os.path.join(out_dir, "%(title)s.%(ext)s"),
                 "progress_hooks": [hook],
                 "quiet": True, "no_warnings": True,
+                "ignoreerrors": True,   # skip unavailable videos in playlist
             }
+
+            # ── playlist handling ─────────────────────────────────────────
+            if self._playlist_on:
+                opts["noplaylist"] = False
+                # Create subfolder for playlists
+                opts["outtmpl"] = os.path.join(
+                    out_dir, "%(playlist_title|Playlist)s",
+                    "%(playlist_index|0)03d - %(title)s.%(ext)s")
+
+                # Track playlist progress
+                _orig_hook = hook
+                def playlist_hook(d):
+                    _orig_hook(d)
+                    if d.get("status") == "downloading":
+                        idx = d.get("playlist_index") or d.get("info_dict", {}).get("playlist_index")
+                        total = d.get("playlist_count") or d.get("info_dict", {}).get("playlist_count")
+                        if idx and total:
+                            playlist_count[0] = idx
+                            playlist_count[1] = total
+                opts["progress_hooks"] = [playlist_hook]
+            else:
+                opts["noplaylist"] = True
+
+            # ── format selection ──────────────────────────────────────────
             if mode == "audio":
                 opts.update({"format":"bestaudio/best","postprocessors":[{
                     "key":"FFmpegExtractAudio",
@@ -672,6 +777,11 @@ class Oxygen(tk.Tk):
 
             with yt_dlp.YoutubeDL(opts) as ydl:
                 ydl.download([url])
+
+            # ── completion ────────────────────────────────────────────────
+            if self._playlist_on and len(saved) > 1:
+                msg = self.tr["playlist_done"].format(count=len(saved))
+                self._log(msg)
 
             final = saved[-1] if saved else None
             self.after(0, self._on_done, True, final, out_dir)
@@ -705,7 +815,9 @@ class Oxygen(tk.Tk):
         d.configure(bg=P["BG2"])
         d.resizable(False, False)
         W2, H2 = 420, 210
-        d.geometry(f"{W2}x{H2}+{self.winfo_x()+(self._W-W2)//2}+{self.winfo_y()+(self._H-H2)//2}")
+        cx = self.winfo_x() + (self.winfo_width()  - W2) // 2
+        cy = self.winfo_y() + (self.winfo_height() - H2) // 2
+        d.geometry(f"{W2}x{H2}+{cx}+{cy}")
         d.grab_set()
 
         set_window_icon(d)
@@ -762,6 +874,88 @@ class Oxygen(tk.Tk):
                 relief="flat", bd=0, padx=14, pady=7,
                 cursor="hand2", command=cmd).pack(side="left", padx=5)
 
+    # ── about / yapımcı window ────────────────────────────────────────────────
+    def _open_about(self):
+        """Show a clean About dialog with social links."""
+        P  = self.P
+        tr = self.tr
+        d  = tk.Toplevel(self)
+        d.title(f"{tr['title']} – {tr['about_title']}")
+        d.configure(bg=P["BG2"])
+        d.resizable(False, False)
+        W2, H2 = 380, 340
+        cx = self.winfo_x() + (self.winfo_width()  - W2) // 2
+        cy = self.winfo_y() + (self.winfo_height() - H2) // 2
+        d.geometry(f"{W2}x{H2}+{cx}+{cy}")
+        d.grab_set()
+        set_window_icon(d)
+
+        # ── logo ──
+        about_logo_frame = tk.Frame(d, bg=P["BG2"])
+        about_logo_frame.pack(pady=(24, 8))
+        _about_logo = None
+        for path in [LOGO_PNG, ICON_PATH]:
+            if os.path.exists(path):
+                try:
+                    from PIL import Image, ImageTk
+                    img = Image.open(path).convert("RGBA").resize((64, 64), Image.LANCZOS)
+                    _about_logo = ImageTk.PhotoImage(img)
+                    lbl = tk.Label(about_logo_frame, image=_about_logo,
+                        bg=P["BG2"], bd=0, highlightthickness=0)
+                    lbl.image = _about_logo  # prevent GC
+                    lbl.pack()
+                    break
+                except Exception:
+                    pass
+        if _about_logo is None:
+            tk.Label(about_logo_frame, text="⊙", font=F(40),
+                bg=P["BG2"], fg=self.ACC, bd=0).pack()
+
+        # ── title + version ──
+        tk.Label(d, text=tr["title"],
+            font=F(16, "bold"), bg=P["BG2"], fg=P["FG"]).pack(pady=(4, 0))
+        tk.Label(d, text=tr["about_version"],
+            font=F(10), bg=P["BG2"], fg=self.ACC).pack(pady=(0, 4))
+        tk.Label(d, text=tr["about_desc"],
+            font=F(9), bg=P["BG2"], fg=P["MUTED"],
+            justify="center").pack(pady=(0, 16))
+
+        # ── made by credit ──
+        tk.Label(d, text=tr["about_made_by"],
+            font=F(10, "bold"), bg=P["BG2"], fg=P["FG2"]).pack(pady=(0, 12))
+
+        # ── separator ──
+        tk.Frame(d, bg=P["BORDER"], height=1).pack(fill="x", padx=40, pady=(0, 16))
+
+        # ── social link buttons (brand colors) ──
+        link_frame = tk.Frame(d, bg=P["BG2"])
+        link_frame.pack()
+
+        # GitHub: dark gray, YouTube: red
+        social_data = [
+            (tr["about_github"],  "⚡", self.SOCIAL_GITHUB,  "#333333", "#ffffff"),
+            (tr["about_youtube"], "▶",  self.SOCIAL_YOUTUBE, "#ff0000", "#ffffff"),
+        ]
+        for label, icon, url, bg_color, fg_color in social_data:
+            btn = tk.Button(link_frame, text=f"{icon}  {label}",
+                font=F(10, "bold"),
+                bg=bg_color, fg=fg_color,
+                activebackground=darken(bg_color, 0.8), activeforeground=fg_color,
+                relief="flat", bd=0, padx=20, pady=8,
+                highlightbackground=P["BORDER"], highlightthickness=1,
+                cursor="hand2",
+                command=lambda u=url: webbrowser.open(u))
+            btn.pack(side="left", padx=6)
+
+        # ── close button ──
+        tk.Frame(d, bg=P["BORDER"], height=1).pack(fill="x", padx=40, pady=(16, 0))
+        tk.Button(d, text=tr["about_close"],
+            font=F(10),
+            bg=P["BTN"], fg=P["FG2"],
+            activebackground=P["INPUT"], relief="flat", bd=0,
+            padx=18, pady=8, cursor="hand2",
+            command=d.destroy).pack(pady=14)
+
     # ── settings window ──────────────────────────────────────────────────────
     def _open_settings(self):
         P  = self.P
@@ -771,7 +965,9 @@ class Oxygen(tk.Tk):
         d.configure(bg=P["BG2"])
         d.resizable(False, False)
         W2, H2 = 440, 480
-        d.geometry(f"{W2}x{H2}+{self.winfo_x()+(self._W-W2)//2}+{self.winfo_y()+(self._H-H2)//2}")
+        cx = self.winfo_x() + (self.winfo_width()  - W2) // 2
+        cy = self.winfo_y() + (self.winfo_height() - H2) // 2
+        d.geometry(f"{W2}x{H2}+{cx}+{cy}")
         d.grab_set()
 
         set_window_icon(d)
@@ -953,6 +1149,8 @@ class Oxygen(tk.Tk):
         self._lbl_sub.config(bg=P["BG"], fg=P["MUTED"])
         self._gear_btn.config(bg=P["BG"], fg=P["MUTED"],
                                activebackground=P["BG"], activeforeground=P["FG"])
+        self._about_btn.config(bg=P["BG"], fg=P["MUTED"],
+                                activebackground=P["BG"], activeforeground=P["FG"])
         # badge row bg
         for child in self._top_frame.winfo_children():
             if isinstance(child, tk.Frame):
@@ -979,6 +1177,18 @@ class Oxygen(tk.Tk):
             b.config(text=lbl, bg=P["BTN"], fg=P["MUTED"],
                      activebackground=P["INPUT"], activeforeground=P["FG"])
         self._set_mode(self.mode.get())
+
+        # playlist btn
+        if self._playlist_on:
+            self._playlist_btn.config(text=tr["playlist_toggle"],
+                bg=self.ACC_BG, fg=P["FG"],
+                activebackground=P["INPUT"],
+                highlightbackground=P["BORDER"])
+        else:
+            self._playlist_btn.config(text=tr["playlist_toggle"],
+                bg=P["BTN"], fg=P["MUTED"],
+                activebackground=P["INPUT"],
+                highlightbackground=P["BORDER"])
 
         # paste btn
         self._paste_btn.config(text=tr["btn_paste"],
