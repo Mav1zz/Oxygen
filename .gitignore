@@ -2,12 +2,13 @@
 __pycache__/
 *.pyc
 *.pyo
-# Build artifacts
+# Build
 build/
 dist/
 *.egg-info/
-# Oxygen config
+# Oxygen
 .oxygen_cfg.json
 oxygen.py.backup
-# Cookies - do not commit
+# Credentials
 cookies.txt
+*.json.bak
