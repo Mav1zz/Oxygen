@@ -1,8 +1,13 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
+# Build artifacts
 build/
 dist/
 *.egg-info/
+# Oxygen config
 .oxygen_cfg.json
 oxygen.py.backup
+# Cookies - do not commit
+cookies.txt
