@@ -1,3 +1,9 @@
+"""
+Oxygen – Multi-platform media downloader  v3.0
+Supports: YouTube · SoundCloud · X (Twitter) · Instagram · and 1000+ more via yt-dlp
+Features: Playlist · Resolution/Format/Quality selection · Responsive UI · About · Drag & Drop
+"""
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import threading, subprocess, sys, os, json, shutil, platform, re, time, webbrowser
@@ -22,14 +28,28 @@ def FM(size):
     return (_FONT_M, size)
 
 # ─── paths ────────────────────────────────────────────────────────────────────
+# EXE_DIR  = directory of the running exe/script  (for ffmpeg & user assets)
+# BASE_DIR = directory of bundled data files       (icons packed by PyInstaller)
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-    BASE_DIR = sys._MEIPASS
-    EXE_DIR  = os.path.dirname(sys.executable)
+    BASE_DIR = sys._MEIPASS                          # bundled data (icons, etc.)
+    EXE_DIR  = os.path.dirname(sys.executable)       # actual exe location
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     EXE_DIR  = BASE_DIR
 
-CFG_PATH  = os.path.join(os.path.expanduser("~"), ".oxygen_cfg.json")
+def _app_data_dir():
+    """Return (and create) the Oxygen config folder."""
+    if platform.system() == "Windows":
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+    elif platform.system() == "Darwin":
+        base = os.path.join(os.path.expanduser("~"), "Library", "Application Support")
+    else:
+        base = os.environ.get("XDG_CONFIG_HOME", os.path.join(os.path.expanduser("~"), ".config"))
+    folder = os.path.join(base, "Oxygen")
+    os.makedirs(folder, exist_ok=True)
+    return folder
+
+CFG_PATH = os.path.join(_app_data_dir(), "config.json")
 ICON_PATH = os.path.join(BASE_DIR, "oxygen.ico")
 LOGO_PNG  = os.path.join(BASE_DIR, "oxygen.png")
 
@@ -179,11 +199,13 @@ def _default_downloads():
     return home
 
 DEFAULT_CFG = {
-    "theme_color":  "#7c3aed",
-    "app_theme":    "oled",
-    "language":     "en",
-    "download_dir": _default_downloads(),
-    "auto_paste":   True,
+    "theme_color":    "#7c3aed",
+    "app_theme":      "oled",
+    "language":       "en",
+    "download_dir":   _default_downloads(),
+    "auto_paste":     True,
+    "cookie_browser": "none",
+    "cookie_file":    "",
 }
 
 def load_cfg():
@@ -203,32 +225,98 @@ def save_cfg(cfg):
 # ═══════════════════════════════════════════════════════════════════════════════
 # DEPENDENCY INSTALLER
 # ═══════════════════════════════════════════════════════════════════════════════
-def _pip_install(pkg):
-    cmd = [sys.executable, "-m", "pip", "install", pkg, "-q"]
+_IS_FROZEN = getattr(sys, 'frozen', False)
+
+def _find_python():
+    """Find the real Python interpreter (not the frozen exe)."""
+    # Never use sys.executable when frozen — it's the EXE itself
+    if not _IS_FROZEN:
+        return sys.executable
+    # Search common locations
+    candidates = []
+    if _SYS == "Windows":
+        import winreg
+        for root in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
+            for base in [r"SOFTWARE\Python\PythonCore", r"SOFTWARE\WOW6432Node\Python\PythonCore"]:
+                try:
+                    with winreg.OpenKey(root, base) as k:
+                        for i in range(winreg.QueryInfoKey(k)[0]):
+                            ver = winreg.EnumKey(k, i)
+                            try:
+                                with winreg.OpenKey(k, ver + r"\InstallPath") as p:
+                                    path = winreg.QueryValue(p, None)
+                                    exe = os.path.join(path, "python.exe")
+                                    if os.path.isfile(exe):
+                                        candidates.append(exe)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+        for name in ["python3.exe", "python.exe"]:
+            found = shutil.which(name)
+            if found:
+                candidates.append(found)
+    else:
+        for name in ["python3", "python"]:
+            found = shutil.which(name)
+            if found:
+                candidates.append(found)
+    # Return first valid one
+    for c in candidates:
+        try:
+            r = subprocess.run([c, "--version"], capture_output=True, timeout=5)
+            if r.returncode == 0:
+                return c
+        except Exception:
+            pass
+    return None
+
+def _pip_install(pkg, log_cb=None):
+    python = _find_python()
+    if python is None:
+        raise RuntimeError(
+            "Python not found on PATH.\n"
+            "Please install Python from https://python.org and re-run Oxygen."
+        )
+    cmd = [python, "-m", "pip", "install", pkg, "-q", "--upgrade"]
     if platform.system() != "Windows":
         cmd.append("--break-system-packages")
-    subprocess.check_call(cmd, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"pip install {pkg} failed:\n{result.stderr.strip()}")
 
 def ensure_deps(log_cb, tr):
-    for pkg, import_name, key_ok in [
-        ("yt-dlp",  "yt_dlp", "pkg_ytdlp_ok"),
-        ("Pillow",  "PIL",    "pkg_pillow_ok"),
+    # When frozen: yt-dlp and Pillow must be bundled via PyInstaller.
+    # We still check and report, but never try to pip-install into the frozen exe.
+    for pkg, import_name, label in [
+        ("yt-dlp",  "yt_dlp", "yt-dlp"),
+        ("Pillow",  "PIL",    "Pillow"),
     ]:
         try:
             __import__(import_name)
+            log_cb(f"✓ {label} ready")
         except ImportError:
-            log_cb(f"📦 installing {pkg}…")
-            _pip_install(pkg)
-            log_cb(tr[key_ok])
+            if _IS_FROZEN:
+                log_cb(f"✗ {label} not bundled — rebuild EXE with updated build.bat")
+            else:
+                log_cb(f"📦 installing {pkg}…")
+                try:
+                    _pip_install(pkg, log_cb)
+                    log_cb(f"✓ {label} ready")
+                except Exception as e:
+                    log_cb(f"✗ {label} install failed: {e}")
 
+    # ── Check ffmpeg ─────────────────────────────────────────────────────────
     _ffmpeg_name = "ffmpeg.exe" if _SYS == "Windows" else "ffmpeg"
 
+    # 1) next to the exe
     _local_ffmpeg = os.path.join(EXE_DIR, _ffmpeg_name)
     if os.path.isfile(_local_ffmpeg):
         os.environ["PATH"] = EXE_DIR + os.pathsep + os.environ.get("PATH", "")
         log_cb(tr.get("pkg_ffmpeg_local", "✓ ffmpeg found in app folder"))
         return
 
+    # 2) bundled in _MEIPASS
     if BASE_DIR != EXE_DIR:
         _meipass_ffmpeg = os.path.join(BASE_DIR, _ffmpeg_name)
         if os.path.isfile(_meipass_ffmpeg):
@@ -236,16 +324,20 @@ def ensure_deps(log_cb, tr):
             log_cb(tr.get("pkg_ffmpeg_local", "✓ ffmpeg found (bundled)"))
             return
 
+    # 3) system PATH
     if shutil.which("ffmpeg"):
         log_cb(tr.get("pkg_ffmpeg_ok", "✓ ffmpeg ready"))
         return
 
-    log_cb(tr["pkg_ffmpeg"])
-    try:
-        _auto_ffmpeg(log_cb)
-        log_cb(tr["pkg_ffmpeg_ok"])
-    except Exception as e:
-        log_cb(f"{tr['pkg_ffmpeg_fail']}: {e}")
+    # 4) warn — don't try to auto-install when frozen
+    log_cb("⚠ ffmpeg not found — place ffmpeg.exe next to Oxygen.exe")
+    log_cb("  Download: https://ffmpeg.org/download.html")
+    if not _IS_FROZEN:
+        try:
+            _auto_ffmpeg(log_cb)
+            log_cb(tr["pkg_ffmpeg_ok"])
+        except Exception as e:
+            log_cb(f"{tr['pkg_ffmpeg_fail']}: {e}")
 
 def _auto_ffmpeg(log_cb):
     sys_name = platform.system()
@@ -348,6 +440,7 @@ VFMT_OPTS = ["mp4", "mkv", "webm", "avi", "mov"]
 AQ_OPTS   = ["best", "320k", "256k", "192k", "128k", "96k", "64k"]
 AFMT_OPTS = ["mp3", "m4a", "opus", "flac", "wav", "aac"]
 
+# height in pixels for each resolution label
 _RES_HEIGHT = {
     "best": None, "4K (2160p)": 2160, "1440p": 1440, "1080p": 1080,
     "720p": 720, "480p": 480, "360p": 360, "240p": 240, "worst": -1,
@@ -394,6 +487,7 @@ class Oxygen(tk.Tk):
         self._logo_img    = None
         self._playlist_on = False
 
+        # ── quality / format selections ──
         self.res_var  = tk.StringVar(value="best")
         self.vfmt_var = tk.StringVar(value="mp4")
         self.aq_var   = tk.StringVar(value="best")
@@ -631,12 +725,15 @@ class Oxygen(tk.Tk):
             f.pack_forget()
 
         if mode == "audio":
+            # Audio-only: show audio quality + audio format
             self._aq_frame.pack(side="left", padx=(0, 6))
             self._afmt_frame.pack(side="left")
         elif mode == "mute":
+            # Video, no audio: show resolution + video format
             self._res_frame.pack(side="left", padx=(0, 6))
             self._vfmt_frame.pack(side="left")
-        else:
+        else:  # auto
+            # Video + audio: show resolution + video format
             self._res_frame.pack(side="left", padx=(0, 6))
             self._vfmt_frame.pack(side="left")
 
@@ -807,7 +904,15 @@ class Oxygen(tk.Tk):
 
     def _do_download(self, url, out_dir, mode, res, vfmt, aq, afmt):
         try:
-            import yt_dlp
+            try:
+                import yt_dlp
+            except ImportError:
+                raise RuntimeError(
+                    "yt-dlp is not available.\n\n"
+                    "EXE kullanıyorsanız: build.bat ile yeniden derleyin.\n"
+                    "Python ile çalıştırıyorsanız: pip install yt-dlp"
+                )
+
             saved = []
 
             def hook(d):
@@ -820,14 +925,39 @@ class Oxygen(tk.Tk):
                     fn = d.get("filename","")
                     saved.append(fn)
                     self._log(f"  ✓ {os.path.basename(fn)}")
+                elif d.get("status") == "error":
+                    err = d.get("error", "")
+                    if err:
+                        self._log(f"  ✗ hata: {err}")
 
             opts = {
-                "outtmpl":         os.path.join(out_dir, "%(title)s.%(ext)s"),
-                "progress_hooks":  [hook],
-                "quiet":           True,
-                "no_warnings":     True,
-                "ignoreerrors":    True,
+                "outtmpl":           os.path.join(out_dir, "%(title)s.%(ext)s"),
+                "progress_hooks":    [hook],
+                "quiet":             True,
+                "no_warnings":       True,
+                "ignoreerrors":      False,
+                "retries":           5,
+                "fragment_retries":  5,
+                "http_headers": {
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/125.0.0.0 Safari/537.36"
+                    ),
+                    "Accept-Language": "en-US,en;q=0.9",
+                },
             }
+
+            # ── cookie bypass (fixes YouTube 403) ─────────────────────────
+            # Priority: cookies.txt file > browser cookies
+            cookie_file = self.cfg.get("cookie_file", "").strip()
+            browser = self.cfg.get("cookie_browser", "none")
+            if cookie_file and os.path.isfile(cookie_file):
+                opts["cookiefile"] = cookie_file
+                self._log(f"  🍪 cookies.txt: {os.path.basename(cookie_file)}")
+            elif browser and browser != "none":
+                opts["cookiesfrombrowser"] = (browser,)
+                self._log(f"  🍪 cookies from {browser}")
 
             # ── playlist ──────────────────────────────────────────────────
             if self._playlist_on:
@@ -836,6 +966,7 @@ class Oxygen(tk.Tk):
                     out_dir,
                     "%(playlist_title|Playlist)s",
                     "%(playlist_index|0)03d - %(title)s.%(ext)s")
+                opts["ignoreerrors"] = True  # skip unavailable items in playlist
 
                 _orig_hook = hook
                 def playlist_hook(d):
@@ -856,8 +987,7 @@ class Oxygen(tk.Tk):
             height = _RES_HEIGHT.get(res, None)
 
             if mode == "audio":
-                # ── audio only ──
-                aq_num = aq.rstrip("k") if aq != "best" else "0"  # 0 = VBR best
+                aq_num = aq.rstrip("k") if aq != "best" else "0"
                 opts["format"] = "bestaudio/best"
                 opts["postprocessors"] = [{
                     "key":              "FFmpegExtractAudio",
@@ -866,7 +996,6 @@ class Oxygen(tk.Tk):
                 }]
 
             elif mode == "mute":
-                # ── video only, no audio ──
                 if height == -1:
                     opts["format"] = "worstvideo"
                 elif height:
@@ -878,8 +1007,7 @@ class Oxygen(tk.Tk):
                     opts["format"] = f"bestvideo[ext={vfmt}]/bestvideo"
                 opts["merge_output_format"] = vfmt
 
-            else:
-                # ── auto: best video + audio ──
+            else:  # auto
                 if height == -1:
                     opts["format"] = "worstvideo+worstaudio/worst"
                 elif height:
@@ -897,15 +1025,42 @@ class Oxygen(tk.Tk):
                     )
                 opts["merge_output_format"] = vfmt
 
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.download([url])
+            self._log(f"  format: {opts['format']}")
+
+            def _run_download(download_opts):
+                with yt_dlp.YoutubeDL(download_opts) as ydl:
+                    retcode = ydl.download([url])
+                    if retcode != 0:
+                        self._log(f"  ⚠ yt-dlp returned code {retcode}")
+
+            try:
+                _run_download(opts)
+            except Exception as dl_err:
+                err_str = str(dl_err)
+                # Cookie errors (browser locked, permission denied, etc.)
+                if "cookie" in err_str.lower() or "CookieLoad" in err_str:
+                    self._log("  ⚠ Cookie okuma hatasi — tarayici acik olabilir.")
+                    self._log("  ↻ Cookie olmadan tekrar deneniyor...")
+                    opts_no_cookie = dict(opts)
+                    opts_no_cookie.pop("cookiesfrombrowser", None)
+                    opts_no_cookie.pop("cookiefile", None)
+                    _run_download(opts_no_cookie)
+                else:
+                    raise
 
             if self._playlist_on and len(saved) > 1:
                 self._log(self.tr["playlist_done"].format(count=len(saved)))
 
             final = saved[-1] if saved else None
             self.after(0, self._on_done, True, final, out_dir)
+
         except Exception as e:
+            import traceback
+            tb = traceback.format_exc()
+            self._log(f"  ✗ HATA: {e}")
+            # Log full traceback to help debug
+            for line in tb.splitlines():
+                self._log(f"    {line}")
             self.after(0, self._on_done, False, None, out_dir, str(e))
 
     def _on_done(self, ok, filepath, out_dir, err=""):
@@ -1068,7 +1223,7 @@ class Oxygen(tk.Tk):
         d.title(f"{tr['title']} – {tr['settings_title']}")
         d.configure(bg=P["BG2"])
         d.resizable(False, False)
-        W2, H2 = 440, 490
+        W2, H2 = 460, 660
         cx = self.winfo_x() + (self.winfo_width()  - W2) // 2
         cy = self.winfo_y() + (self.winfo_height() - H2) // 2
         d.geometry(f"{W2}x{H2}+{cx}+{cy}")
@@ -1202,17 +1357,70 @@ class Oxygen(tk.Tk):
             cursor="hand2", command=toggle_ap)
         ap_cb.pack(side="right")
 
+        sep()
+
+        # ── cookie browser (fixes YouTube 403) ──────────────────────────────
+        section("YOUTUBE / COOKIE BYPASS")
+        ck_row = tk.Frame(d, bg=P["BG2"])
+        ck_row.pack(padx=24, fill="x")
+        tk.Label(ck_row, text="Browser cookies (fixes 403 errors):",
+            font=F(9), bg=P["BG2"], fg=P["FG2"]).pack(side="left", padx=(0,8))
+
+        BROWSERS = ["none", "chrome", "firefox", "edge", "brave", "opera", "chromium", "vivaldi"]
+        sel_browser = tk.StringVar(value=self.cfg.get("cookie_browser", "none"))
+        ck_combo = ttk.Combobox(ck_row, textvariable=sel_browser,
+            values=BROWSERS, state="readonly", font=F(9), width=10, style="Q.TCombobox")
+        ck_combo.pack(side="left")
+
+        tk.Label(ck_row, text="  ← pick your browser",
+            font=F(8), bg=P["BG2"], fg=P["MUTED"]).pack(side="left")
+
+        # cookies.txt (most reliable, works even when browser is open)
+        cf_frame = tk.Frame(d, bg=P["BG2"])
+        cf_frame.pack(padx=24, pady=(6,0), fill="x")
+        tk.Label(cf_frame, text="Or use cookies.txt file (most reliable):",
+            font=F(9), bg=P["BG2"], fg=P["FG2"]).pack(anchor="w")
+
+        cf_row2 = tk.Frame(d, bg=P["BG2"])
+        cf_row2.pack(padx=24, pady=(2,0), fill="x")
+        cookie_file_var = tk.StringVar(value=self.cfg.get("cookie_file", ""))
+        tk.Entry(cf_row2, textvariable=cookie_file_var,
+            bg=P["INPUT"], fg=P["FG2"], relief="flat", font=F(8),
+            highlightthickness=1, highlightbackground=P["BORDER"],
+            insertbackground=P["FG"], bd=0
+            ).pack(side="left", fill="x", expand=True, ipady=4, padx=(0,6))
+
+        def browse_cookie():
+            p = filedialog.askopenfilename(
+                title="Select cookies.txt",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")])
+            if p:
+                cookie_file_var.set(p)
+                sel_browser.set("none")
+
+        tk.Button(cf_row2, text="Browse", font=F(8),
+            bg=P["BTN"], fg=P["FG2"],
+            activebackground=P["INPUT"], relief="flat", bd=0,
+            padx=8, pady=4, cursor="hand2",
+            command=browse_cookie).pack(side="left")
+
+        tk.Label(d, text="  Tip: chrome://net-export or EditThisCookie ext → export Netscape format",
+            font=F(7), bg=P["BG2"], fg=P["MUTED"], anchor="w"
+            ).pack(padx=24, anchor="w")
+
         # ── save / cancel ────────────────────────────────────────────────────
         tk.Frame(d, bg=P["BORDER"], height=1).pack(fill="x", padx=24, pady=(14,0))
         btns = tk.Frame(d, bg=P["BG2"])
         btns.pack(pady=14)
 
         def apply_save():
-            self.cfg["theme_color"]  = sel_color.get()
-            self.cfg["app_theme"]    = sel_theme.get()
-            self.cfg["language"]     = sel_lang.get()
-            self.cfg["download_dir"] = dir_var.get()
-            self.cfg["auto_paste"]   = ap_var.get()
+            self.cfg["theme_color"]    = sel_color.get()
+            self.cfg["app_theme"]      = sel_theme.get()
+            self.cfg["language"]       = sel_lang.get()
+            self.cfg["download_dir"]   = dir_var.get()
+            self.cfg["auto_paste"]     = ap_var.get()
+            self.cfg["cookie_browser"] = sel_browser.get()
+            self.cfg["cookie_file"]    = cookie_file_var.get().strip()
             save_cfg(self.cfg)
             self.tr   = load_lang(self.cfg["language"])
             self._pal = PALETTES[self.cfg["app_theme"]]
@@ -1280,6 +1488,7 @@ class Oxygen(tk.Tk):
             bg=P["BTN"], fg=P["FG"], activebackground=P["INPUT"],
             highlightbackground=P["BORDER"])
 
+        # quality row background
         self._qrow.config(bg=P["BG"])
         for frame in [self._res_frame, self._vfmt_frame, self._aq_frame, self._afmt_frame]:
             frame.config(bg=P["BG"])
