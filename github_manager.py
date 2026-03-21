@@ -462,7 +462,7 @@ def screen_setup():
     while True:
         rows, cols = tsz()
         w = min(68, cols - 4)
-        h = 22
+        h = 26
         r = max(1, (rows - h) // 2)
         c = (cols - w) // 2
 
@@ -498,11 +498,22 @@ def screen_setup():
         mv(r + 8, c + 1)
         print(" " + C["border"] + "─"*(w-2) + R, end="", flush=True)
 
+        # Try to read existing git user config as defaults
+        def _git_cfg(key):
+            try:
+                return subprocess.check_output(
+                    ["git", "config", "--global", key],
+                    stderr=subprocess.DEVNULL, text=True).strip()
+            except Exception:
+                return ""
+
         fields = [
-            {"label": "Token",  "key": "token",  "default": saved.get("token",""),             "password": True},
-            {"label": "Owner",  "key": "owner",  "default": saved.get("owner", o_def or ""),   "password": False},
-            {"label": "Repo",   "key": "repo",   "default": saved.get("repo",  r_def or ""),   "password": False},
-            {"label": "Branch", "key": "branch", "default": saved.get("branch","main"),        "password": False},
+            {"label": "Token",  "key": "token",      "default": saved.get("token",""),                    "password": True},
+            {"label": "Owner",  "key": "owner",      "default": saved.get("owner", o_def or ""),           "password": False},
+            {"label": "Repo",   "key": "repo",       "default": saved.get("repo",  r_def or ""),           "password": False},
+            {"label": "Branch", "key": "branch",     "default": saved.get("branch","main"),                "password": False},
+            {"label": "Email",  "key": "git_email",  "default": saved.get("git_email", _git_cfg("user.email")), "password": False},
+            {"label": "Name",   "key": "git_name",   "default": saved.get("git_name",  _git_cfg("user.name")),  "password": False},
         ]
 
         idx = 0
@@ -699,35 +710,96 @@ def screen_push(cfg):
         log("", C["muted"])
         log("Nothing new to commit — already up to date.", C["muted"])
 
+    # ── configure git user (always apply saved values) ──
+    git_email = cfg.get("git_email", "").strip()
+    git_name  = cfg.get("git_name",  "").strip()
+
+    if not git_email or not git_name:
+        # Ask inline
+        log("", C["muted"])
+        log("Git user not configured — please enter:", C["yellow"])
+        redraw_log()
+        rows2, cols2 = tsz()
+
+        def ask_inline(prompt, default=""):
+            log(f"  {prompt}", C["muted"])
+            redraw_log()
+            # Find row of last log entry on screen
+            h_log2 = rows2 - 6
+            line_row = r_box + 2 + min(len(log_lines) - 1, h_log2 - 1)
+            mv(line_row, c_box + 4 + len(prompt) + 2)
+            val, _ = input_field(line_row, c_box + 4 + len(prompt), w - len(prompt) - 8, default=default)
+            log_lines[-1] = (f"  {prompt}{val}", C["fg"])
+            redraw_log()
+            return val
+
+        if not git_email:
+            git_email = ask_inline("Email  : ", "")
+        if not git_name:
+            git_name  = ask_inline("Name   : ", "")
+
+        cfg["git_email"] = git_email
+        cfg["git_name"]  = git_name
+        save_cfg(cfg)
+
+    if git_email:
+        run_git(["git", "config", "--global", "user.email", git_email])
+        log(f"✓ git user.email = {git_email}", C["green"])
+    if git_name:
+        run_git(["git", "config", "--global", "user.name",  git_name])
+        log(f"✓ git user.name  = {git_name}", C["green"])
+
     # ── commit ──
     commit_msg = f"Update — {time.strftime('%Y-%m-%d %H:%M')}"
     code, _, err = run_git(["git", "commit", "-m", commit_msg])
     if code == 0:
         log(f"✓ Committed: {commit_msg}", C["green"])
-    elif "nothing to commit" in err.lower():
-        log("Nothing to commit.", C["muted"])
+    elif "nothing to commit" in err.lower() or "nothing added" in err.lower():
+        log("Nothing to commit — already up to date.", C["muted"])
     else:
-        log(f"Commit error: {err}", C["yellow"])
+        log(f"Commit error: {err[:120]}", C["yellow"])
 
     # ── push ──
     log("", C["muted"])
     log("Pushing to GitHub…", C["muted"])
     url = f"https://github.com/{cfg['owner']}/{cfg['repo']}.git"
+
     code, out, err = run_git(["git", "push", "-u", "origin", cfg["branch"]])
     if code == 0:
         log(f"✓ Push complete → {url}", C["green"])
     else:
-        log(f"Push failed: {err[:80]}", C["yellow"])
-        log("Trying pull --rebase first…", C["muted"])
-        run_git(["git", "pull", "origin", cfg["branch"],
-                 "--rebase", "--strategy-option=theirs"])
-        code2, _, err2 = run_git(["git", "push", "-u", "origin", cfg["branch"]])
-        if code2 == 0:
-            log(f"✓ Push complete → {url}", C["green"])
+        combined = (out + err).lower()
+        log(f"Push failed: {(out+err).strip()[:100]}", C["yellow"])
+
+        if "rejected" in combined or "fetch first" in combined or "tip of your current branch is behind" in combined:
+            log("Remote has newer commits. Trying rebase…", C["muted"])
+            run_git(["git", "fetch", "origin", cfg["branch"]])
+            run_git(["git", "rebase", f"origin/{cfg['branch']}"])
+            code2, out2, err2 = run_git(["git", "push", "-u", "origin", cfg["branch"]])
+            if code2 == 0:
+                log(f"✓ Push complete → {url}", C["green"])
+            else:
+                log("Rebase push failed too.", C["yellow"])
+                log("", C["muted"])
+                # Ask force push
+                log("Force push will OVERWRITE remote. Press F to force, any other key to skip.", C["yellow"])
+                redraw_log()
+                show()
+                fk = getch()
+                hide()
+                if fk in ('f', 'F'):
+                    run_git(["git", "rebase", "--abort"])
+                    code3, _, err3 = run_git(["git", "push", "--force", "-u", "origin", cfg["branch"]])
+                    if code3 == 0:
+                        log(f"✓ Force push complete → {url}", C["green"])
+                    else:
+                        log(f"Force push failed: {err3[:80]}", C["red"])
+                else:
+                    log("Force push skipped.", C["muted"])
+        elif "authentication" in combined or "403" in combined or "credential" in combined:
+            log("Authentication error. Check your token has 'repo' scope.", C["red"])
         else:
-            log(f"Still failed: {err2[:80]}", C["red"])
-            log("Try: git config --global user.email 'you@email.com'", C["muted"])
-            log("     git config --global user.name  'YourName'", C["muted"])
+            log(f"Unknown error: {(out+err).strip()[:120]}", C["red"])
 
     log("", C["muted"])
     log("─" * (w - 8), C["border"])
