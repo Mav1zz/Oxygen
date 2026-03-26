@@ -58,56 +58,6 @@ yt-dlp supports **1000+ websites** out of the box. Below are some of the most po
 <details>
 <summary><b>📋 View all 1000+ supported sites (click to expand)</b></summary>
 
-<br/>
-
-**#**
-`10play` · `17live` · `1News` · `1tv` · `23video` · `24tv.ua` · `3sat` · `56.com` · `7plus` · `8tracks` · `9gag` · `9News` · `9now.com.au`
-
-**A**
-`abc.net.au` · `abcnews` · `AbemaTV` · `AcFunBangumi` · `AcFunVideo` · `ADN` · `AdobeConnect` · `adobetv` · `AdultSwim` · `aenetworks` · `AeonCo` · `AirTV` · `AitubeKZVideo` · `Alibaba` · `AliExpressLive` · `AlJazeera` · `Allocine` · `Allstar` · `AlphaPorno` · `Alsace20TV` · `altcensored` · `Alura` · `AmadeusTV` · `Amara` · `AmazonMiniTV` · `AmazonReviews` · `AmazonStore` · `AMCNetworks` · `AmericasTestKitchen` · `AmHistoryChannel` · `AnchorFMEpisode` · `anderetijden` · `Angel` · `AnimalPlanet` · `ant1newsgr` · `antenna:watch` · `Anvato` · `APA` · `Aparat` · `ApplePodcasts` · `appletrailers` · `archive.org` · `ARD` · `ARDAudiothek` · `ARDMediathek` · `Art19` · `arte.sky.it` · `ArteTV` · `asobichannel` · `AsobiStage` · `AtresPlayer` · `AudiMedia` · `AudioBoom` · `audiomack` · `Audius` · `AWAAN` · `AZMedien`
-
-**B**
-`BaiduVideo` · `BanBye` · `Bandcamp` · `Bandlab` · `BannedVideo` · `bbc` · `bbc.co.uk` · `BBVTV` · `BeaconTv` · `Beatport` · `Beeg` · `BerufeTV` · `Bet` · `bfmtv` · `bibeltv` · `Bigflix` · `Bigo` · `Bild` · `BiliBili` · `BilibiliAudio` · `BiliBiliBangumi` · `BiliBiliDynamic` · `BiliLive` · `BioBioChileTV` · `Biography` · `BitChute` · `BlackboardCollaborate` · `blerp` · `blogger.com` · `Bloomberg` · `Bluesky` · `BokeCC` · `BongaCams` · `Boosty` · `BostonGlobe` · `Box` · `BoxCastVideo` · `Bpb` · `BrainPOP` · `BravoTV` · `BreitBart` · `brightcove` · `BTVPlus` · `Bundesliga` · `Bundestag` · `BunnyCdn` · `BusinessInsider` · `BuzzFeed`
-
-**C**
-`CaffeineTV` · `Callin` · `CAM4` · `Camdemy` · `CamFMEpisode` · `CamModels` · `Camsoda` · `Canal1` · `CanalAlpha` · `canalc2.tv` · `Canalplus` · `CaracolTvPlay` · `cbc.ca` · `CBS` · `CBSLocal` · `cbsnews` · `cbssports` · `CCMA` · `CCTV` · `CDA` · `CeskaTelevize` · `CGTN` · `CharlieRose` · `Chaturbate` · `Chilloutzone` · `chzzk` · `cielotv.it` · `CinetecaMilano` · `Cineverse` · `CiscoLiveSearch` · `ciscowebex` · `CJSW` · `Clipchamp` · `CloudflareStream` · `Clyp` · `CNBCVideo` · `CNN` · `CNNIndonesia` · `ComedyCentral` · `CondeNast` · `CONtv` · `CookingChannel` · `Corus` · `Coub` · `CozyTV` · `cp24` · `cpac` · `Cracked` · `Craftsy` · `CrooksAndLiars` · `CrowdBunker` · `CSpan` · `CtsNews` · `CTVNews` · `CultureUnplugged` · `curiositystream` · `Cybrary`
-
-**D**
-`DacastVOD` · `DagelijkseKost` · `DailyMail` · `dailymotion` · `DailyWire` · `damtomo` · `dangalplay` · `daum.net` · `DBTV` · `DctpTv` · `democracynow` · `DestinationAmerica` · `DetikEmbed` · `DeuxM` · `DigitalConcertHall` · `Digiteka` · `Digiview` · `DiscogsReleasePlaylist` · `DiscoveryLife` · `DiscoveryPlus` · `Disney` · `dlf` · `dlive` · `Douyin` · `DouyuShow` · `DouyuTV` · `DPlay` · `Drooble` · `Dropbox` · `Dropout` · `DrTalks` · `DrTuber` · `drtv` · `duboku` · `Dumpert` · `Duoplay`
-
-**E–F**
-`egghead` · `EinsUndEins` · `Element` · `Elonet` · `ElTreceTv` · `Embedder` · `EmbedlyVideo` · `EMPFlix` · `Endemol` · `Epix` · `Eronet` · `EroProfile` · `Ertflix` · `ESPN` · `EsriVideo` · `Eventive` · `Expotv` · `EyedoTV` · `Facebook` · `Fathom` · `FBIVideo` · `FifaTV` · `FilmIntl` · `FilmOn` · `Filmweb` · `FirstTV` · `Flickr` · `FMF` · `Foo` · `FootyRoom` · `Formula1` · `Fox` · `FoxNews` · `FoxSports` · `France.tv` · `France24` · `FranceCulture` · `FranceInter` · `FranceTV` · `FranceTVInfo` · `fudotv` · `FujiTV` · `Funimation` · `Funker530` · `FXNetworks`
-
-**G–H**
-`Gab` · `GabTV` · `Gaskrank` · `GBNews` · `GDCVault` · `Gem` · `GetCourseRu` · `Gfycat` · `GiantBomb` · `Globo` · `GloboArticle` · `Glue` · `GoDiscovery` · `GodTube` · `GodTV` · `GolfChannel` · `GoodGame` · `GooglePodcasts` · `GoogleSearch` · `Graasp` · `GreenNetwork` · `grTV` · `GttpTV` · `GulliKids` · `Gyao` · `Hotstar` · `HungamaAlbum` · `HungamaSong` · `HungamaVideo`
-
-**I–J**
-`icareus` · `ICI` · `ICIArticle` · `ICITele` · `ign.com` · `iHeart` · `IMDb` · `imdb:list` · `imgur` · `INA` · `IndavideoEmbed` · `IndieWire` · `InfoQ` · `Instagram` · `InstagramIOS` · `InstagramTag` · `InstagramUser` · `Internazionale` · `InternetVideoArchive` · `iPrima` · `iq.com` · `IQIYIAlbum` · `IslamChannel` · `IsraelNationalNews` · `ITProTV` · `ITVX` · `JeuxVideo` · `Joj` · `JoqrAg` · `JWPlatform`
-
-**K–L**
-`Kakao` · `KakaoTV` · `KalturaEmbed` · `Kankanews` · `Karaoketv` · `KarriereVideos` · `Khanacademy` · `Kika` · `KinoPoisk` · `KinoWecker` · `Kino` · `KinoBox` · `KinOdyssey` · `Kompas` · `KTH` · `Ku6` · `KUSI` · `LA7` · `LaFont` · `LaRouche` · `Lecturio` · `Leeco` · `LePlay` · `LiTV` · `ListenNotes` · `Litv` · `LiveJournal` · `LiveLeak` · `LivestreamOriginal` · `LNKGO` · `Love-tv` · `LoveHomePorn` · `LRTVS` · `LSM` · `Lynda`
-
-**M–N**
-`MagellanTV` · `mailru` · `MangoTV` · `Markiza` · `MastodonUser` · `MastodonUserVideos` · `Matchtv` · `MBN` · `Mediaklikk` · `MediaStream` · `Megaphone` · `Meipai` · `metacafe` · `MicrosoftEmbed` · `MicrosoftStream` · `MiteleSpain` · `MLB` · `Mofos` · `Monstercat` · `Motherboard` · `MovieFap` · `MTV` · `MTVDE` · `MxPlayer` · `MyVideoGe` · `MyVid` · `MyVision` · `naver.com` · `NBC` · `NBCSports` · `NDR` · `NetEaseMusic` · `Netflix` · `NFB` · `NhkVod` · `Niconico` · `Nitter` · `NJPWWorld` · `NogginVideo` · `Noonoo` · `NorgesTV` · `NovaMov` · `NovaPlay` · `NovaTV` · `NRKI` · `NRKBase` · `ntv.ru` · `NuvideoTV`
-
-**O–P**
-`Odnoklassniki` · `OffTV` · `OKru` · `OnDemandKorea` · `Orf` · `OutsideTV` · `PalcoMP3` · `Pandora` · `Parlview` · `PearVideo` · `PeekVids` · `Pentagon` · `Periscope` · `piapro` · `Piksel` · `Pinkbike` · `Pinterest` · `PlanetMarathi` · `PlaySuisse` · `PlayTV.ge` · `Pluto.tv` · `PodchaserPodcast` · `Pokergo` · `Polsat` · `Porno365` · `PortalMES` · `Puhutv` · `PuhutvSerie`
-
-**Q–R**
-`qqMusic` · `qqMusicAlbum` · `qqMusicPlaylist` · `qqMusicSinger` · `qqMusicToplist` · `R7` · `Radiobremen` · `RadioCanada` · `RadioFrance` · `radiko` · `RadioJavan` · `Rai` · `RaiCultura` · `RaiGiornale` · `RaiPlay` · `RaiPlayLive` · `RaiPlayPlaylist` · `RaiPlaySound` · `RaiPlaySoundLive` · `RaiPlaySoundRaadioP` · `Rapidvideo` · `RCTI` · `RCTIPlus` · `RCTIPlusSerie` · `RCTIPlusTV` · `RCTIPlusTVRecording` · `Reddit` · `RedditR` · · `Redtube` · `ReteNews24` · `Reuters` · `RevolutionNews` · `RFO` · `RGRFM` · `RMFmusic` · `RoosterTeeth` · `RottenTomatoes` · `Rozhlas` · `RTBF` · `RTDocumentary` · `RTE` · `RTERadio` · `RTLNL` · `RTNews` · `RtpPlay` · `RTRFM` · `RTVEPlay` · `RubyTV` · `Rutube` · `RutubeChannel` · `RutubeEmbedded` · `RutubeMovie` · `RutubeTag` · `RUVRU`
-
-**S**
-`Salon` · `SambaEmbed` · `SBSCoPlay` · `Screen9` · `Screencast` · `Screencastify` · `ScreencastOMatic` · `ScrippsNetworks` · `SenateISVP` · `SenateGov` · `Servus` · `ServusTVAt` · `SeznamZpravy` · `SeznamZpravyArticle` · `SharePoint` · `Sibnet` · `SkyIT` · `SkyNews` · `SkySports` · `Slideshare` · `SoundCloud` · `SoundcloudEmbed` · `SoundcloudPlaylist` · `SoundcloudSearch` · `SoundcloudSet` · `SoundcloudTrackStation` · `SoundcloudUser` · `SoundcloudUserHighlights` · `SoundcloudUserTracks` · `SoundgasmF4F` · `Soup` · `SouthPark` · `SovietsCloset` · `SpiegelTV` · `Sport5` · `Spotify` · `SportingNews` · `SportKlub` · · `Sport.pl` · `Spreaker` · `sr.se` · `SRFBE` · `SRMediathek` · `Stitcher` · `Stretchinternet` · `Stripchat` · `STV` · `Substack` · `SunTV` · `SVTPlay` · `SVTSeries` · `SWRMediathek`
-
-**T**
-`Tagesschau` · `Tass` · `TBS` · `TDGlobal` · `TechTV` · `TED` · `Tele5` · `Tele13Radio` · `Telegram` · `TeleTask` · `Tempo` · `TF1` · `TFC` · `TheGuardian` · `TheHoleTv` · `ThePlatform` · `TheSun` · `TheWeatherChannel` · `ThisAmericanLife` · `ThisOldHouse` · `Tiktok` · `TiktokUser` · `TiktokVM` · `toggo` · `ToonGoggles` · `ToubiTV` · `Toypics` · `TRT` · `TRTCocuk` · `TRTRadio` · `TRTWorld` · `TrueID` · `TruNews` · `Tubi` · `Tumblr` · `TVC` · `TVNet` · `TVNow` · `TVPlay` · `TVPlayer` · `Twitter` · `TwitterAmplify` · `TwitterBroadcast` · `TwitterCard` · `TwitterShortener` · `Twich.tv`
-
-**U–V**
-`UbcBotany` · `UDNEmbed` · `UFC` · `UKTVPlay` · `UMG` · `Uol` · `USTVGO` · `Uzstv` · `VBOX7` · `Veoh` · `Vevo` · `VH1` · `Viddler` · `Video321` · `Videobb` · `Videofyme` · `videohive` · `Videomore` · `VideoPress` · `Viidea` · `Viki` · `VikiChannel` · `VimeoAlbum` · `VimeoChannel` · `VimeoGroup` · `VimeoLikes` · `VimeoOndemand` · `VimeoReview` · `VimeoUser` · `VimeoWatchLater` · `Vimeo` · `VK` · `VKPlay` · `VKPlayLive` · `VLive` · `Vocaroo` · `VOD.pl` · `Vodlocker` · `Vodplatform` · `VoicyChannel` · `Voot` · `VootSeries` · `VoxMedia` · `VRTNU` · `VTMGO` · `VtuberClips` · `Vuclip`
-
-**W–Z**
-`WashingtonPost` · `WashingtonPostArticle` · `WASDtv` · `WatchBox` · `WatchIndies` · `WDR` · `WDRPage` · `WDRElefant` · `Weibo` · `WeiboMobile` · `WETV` · `WEtvSeries` · `WFMZi` · `Wikipedia` · `Wimbledon` · `WorldstarhiphopVideo` · `WSJ` · `WSJArticle` · `X (Twitter)` · `Ximalaya` · `Xinpianchang` · `xVideos` · `XNXX` · `XstreamyVideo` · `Yadisk` · `YahooJapanNewsArticle` · `YandexDisk` · `YandexMusic` · `YandexMusicAlbum` · `YandexMusicArtist` · `YandexMusicPlaylist` · `YandexMusicPodcast` · `YandexVideo` · `YouTube` · `YoutubeClip` · `YoutubeFavourites` · `YoutubeHistory` · `YoutubeNotifications` · `YoutubePlaylist` · `YoutubeRecommendations` · `YoutubeSearch` · `YoutubeSubscriptions` · `YoutubeTab` · `YoutubeTruncatedIDURL` · `YoutubeYtBe` · `YoutubeYtUser` · `ZATTOO` · `ZingMp3` · `Zype`
-
 > Full list: [github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)
 
 </details>
@@ -119,16 +69,7 @@ yt-dlp supports **1000+ websites** out of the box. Below are some of the most po
 <!-- ╚══════════════════════════════════════════════════╝ -->
 
 <div align="center">
-
-```
-┌─────────────────────────────────────────────┐
-│                                             │
-│           ⚡  QUICK  START                  │
-│    Get Oxygen running in under a minute     │
-│                                             │
-└─────────────────────────────────────────────┘
-```
-
+   <img src="github/main_banner.png" width="100%" alt="Banner 1">
 </div>
 
 ## ⚡ Quick Start
