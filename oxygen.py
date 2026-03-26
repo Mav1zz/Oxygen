@@ -151,39 +151,42 @@ def get_available_langs() -> list:
 PALETTES = {
     "oled": {
         "BG":      "#000000",
-        "BG2":     "#050505",
-        "INPUT":   "#0a0a0a",
-        "BORDER":  "#1c1c1c",
-        "FG":      "#ffffff",
-        "FG2":     "#aaaaaa",
-        "MUTED":   "#404040",
-        "LOG_BG":  "#050505",
-        "LOG_FG":  "#555555",
-        "BTN":     "#0e0e0e",
+        "BG2":     "#080808",
+        "INPUT":   "#111111",
+        "BORDER":  "#252525",
+        "FG":      "#f5f5f5",
+        "FG2":     "#cccccc",
+        "MUTED":   "#505050",
+        "LOG_BG":  "#080808",
+        "LOG_FG":  "#888888",
+        "BTN":     "#151515",
+        "IS_DARK": True,
     },
     "dark": {
-        "BG":      "#111111",
-        "BG2":     "#0d0d0d",
-        "INPUT":   "#1c1c1c",
-        "BORDER":  "#2e2e2e",
+        "BG":      "#1a1a1a",
+        "BG2":     "#141414",
+        "INPUT":   "#252525",
+        "BORDER":  "#383838",
         "FG":      "#f0f0f0",
-        "FG2":     "#bbbbbb",
-        "MUTED":   "#555555",
-        "LOG_BG":  "#161616",
-        "LOG_FG":  "#666666",
-        "BTN":     "#1e1e1e",
+        "FG2":     "#cccccc",
+        "MUTED":   "#777777",
+        "LOG_BG":  "#1e1e1e",
+        "LOG_FG":  "#aaaaaa",
+        "BTN":     "#2a2a2a",
+        "IS_DARK": True,
     },
     "light": {
-        "BG":      "#f2f2f2",
-        "BG2":     "#e8e8e8",
+        "BG":      "#f0f0f0",
+        "BG2":     "#e4e4e4",
         "INPUT":   "#ffffff",
-        "BORDER":  "#c8c8c8",
-        "FG":      "#111111",
+        "BORDER":  "#bbbbbb",
+        "FG":      "#1a1a1a",
         "FG2":     "#444444",
-        "MUTED":   "#888888",
+        "MUTED":   "#777777",
         "LOG_BG":  "#f8f8f8",
-        "LOG_FG":  "#555555",
-        "BTN":     "#dcdcdc",
+        "LOG_FG":  "#444444",
+        "BTN":     "#d8d8d8",
+        "IS_DARK": False,
     },
 }
 
@@ -206,6 +209,7 @@ DEFAULT_CFG = {
     "auto_paste":     True,
     "cookie_browser": "none",
     "cookie_file":    "",
+    "log_visible":    False,
 }
 
 def load_cfg():
@@ -371,6 +375,40 @@ def _auto_ffmpeg(log_cb):
     log_cb(f"  → ffmpeg placed at {dst}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# NOTIFICATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
+def send_notification(title, message):
+    """Send OS-level toast/notification. Fire-and-forget."""
+    try:
+        if _SYS == "Windows":
+            ps_script = (
+                "Add-Type -AssemblyName System.Windows.Forms;"
+                "$ico = [System.Drawing.SystemIcons]::Information;"
+                "$n = New-Object System.Windows.Forms.NotifyIcon;"
+                "$n.Icon = $ico;"
+                "$n.Visible = $True;"
+                f'$n.ShowBalloonTip(4000, "{title}", "{message}", '
+                "[System.Windows.Forms.ToolTipIcon]::Info);"
+                "Start-Sleep -Milliseconds 4500;"
+                "$n.Dispose()"
+            )
+            subprocess.Popen(
+                ["powershell", "-WindowStyle", "Hidden", "-Command", ps_script],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                creationflags=0x08000000 if _SYS == "Windows" else 0)
+        elif _SYS == "Darwin":
+            subprocess.Popen(
+                ["osascript", "-e",
+                 f'display notification "{message}" with title "{title}"'],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen(
+                ["notify-send", "-i", "emblem-downloads", title, message],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # HELPERS
 # ═══════════════════════════════════════════════════════════════════════════════
 def looks_like_url(t):
@@ -420,9 +458,17 @@ def acc_fg(acc_color):
     lum = 0.299*r + 0.587*g + 0.114*b
     return "#000000" if lum > 160 else "#ffffff"
 
-def acc_bg(acc, alpha=0.18):
+def acc_bg(acc, alpha=0.18, on_light=False):
+    """Accent background tint. on_light=True blends toward white instead of black."""
     h = acc.lstrip("#")
     r,g,b = int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
+    if on_light:
+        # blend accent toward white for light theme
+        r2 = int(r + (255-r)*(1-alpha*2.5))
+        g2 = int(g + (255-g)*(1-alpha*2.5))
+        b2 = int(b + (255-b)*(1-alpha*2.5))
+        return "#{:02x}{:02x}{:02x}".format(
+            max(0,min(255,r2)), max(0,min(255,g2)), max(0,min(255,b2)))
     return "#{:02x}{:02x}{:02x}".format(int(r*alpha), int(g*alpha), int(b*alpha))
 
 def draw_gradient(canvas, w, h, color, bg):
@@ -486,6 +532,7 @@ class Oxygen(tk.Tk):
         self._status      = "idle"
         self._logo_img    = None
         self._playlist_on = False
+        self._log_visible = self.cfg.get("log_visible", False)
 
         # ── quality / format selections ──
         self.res_var  = tk.StringVar(value="best")
@@ -507,7 +554,11 @@ class Oxygen(tk.Tk):
     @property
     def ACC_D(self): return darken(self.ACC)
     @property
-    def ACC_BG(self): return acc_bg(self.ACC)
+    def ACC_BG(self): return acc_bg(self.ACC, on_light=not self.P.get("IS_DARK", True))
+    @property
+    def ACC_BTN_FG(self):
+        """Foreground for active mode buttons — always readable."""
+        return self.ACC if not self.P.get("IS_DARK", True) else self.P["FG"]
     @property
     def ACC_FG(self): return acc_fg(self.ACC)
 
@@ -686,10 +737,21 @@ class Oxygen(tk.Tk):
                                    mode="indeterminate", length=400)
         self.pb.pack(padx=50, pady=(4,0), fill="x")
 
-        # ── log box ───────────────────────────────────────────────────────────
+        # ── log toggle bar ────────────────────────────────────────────────────
+        self._log_toggle_bar = tk.Frame(self, bg=P["BG"])
+        self._log_toggle_bar.pack(padx=50, pady=(8, 0), fill="x")
+
+        self._log_toggle_btn = tk.Button(
+            self._log_toggle_bar, text="▼  log",
+            font=F(8), bg=P["BG"], fg=P["MUTED"],
+            activebackground=P["BG"], activeforeground=P["FG"],
+            relief="flat", bd=0, cursor="hand2",
+            command=self._toggle_log)
+        self._log_toggle_btn.pack(side="left")
+
+        # ── log box (hidden by default) ───────────────────────────────────────
         self._log_frame = tk.Frame(self, bg=P["LOG_BG"],
             highlightbackground=P["BORDER"], highlightthickness=1)
-        self._log_frame.pack(padx=50, pady=(10,16), fill="both", expand=True)
 
         self.log_box = tk.Text(self._log_frame, bg=P["LOG_BG"], fg=P["LOG_FG"],
             font=FM(9), relief="flat", bd=0,
@@ -701,6 +763,13 @@ class Oxygen(tk.Tk):
         self.log_box.pack(side="left", fill="both", expand=True, padx=8, pady=5)
         self._log_sb.pack(side="right", fill="y")
 
+        # ── bottom spacer (visible when log is hidden, centers content) ───────
+        self._bottom_spacer = tk.Frame(self, bg=P["BG"], height=1)
+
+        # Apply initial log visibility
+        self._log_visible = self.cfg.get("log_visible", False)
+        self._apply_log_visibility()
+
         self._log(tr["status_ready"])
 
     # ── combo style ──────────────────────────────────────────────────────────
@@ -710,13 +779,24 @@ class Oxygen(tk.Tk):
         style.configure("Q.TCombobox",
             fieldbackground=P["INPUT"],
             background=P["BTN"],
-            foreground=P["FG2"],
-            selectbackground=P["INPUT"],
-            selectforeground=P["FG"],
-            arrowcolor=P["MUTED"])
+            foreground=P["FG"],
+            selectbackground=self.ACC,
+            selectforeground=acc_fg(self.ACC),
+            arrowcolor=P["FG2"],
+            insertcolor=P["FG"],
+            padding=(4, 2))
         style.map("Q.TCombobox",
-            fieldbackground=[("readonly", P["INPUT"])],
-            foreground=[("readonly", P["FG2"])])
+            fieldbackground=[("readonly", P["INPUT"]), ("focus", P["INPUT"])],
+            foreground=[("readonly", P["FG"]), ("focus", P["FG"])],
+            selectbackground=[("readonly", self.ACC)],
+            selectforeground=[("readonly", acc_fg(self.ACC))],
+            arrowcolor=[("disabled", P["MUTED"]), ("pressed", P["FG"])])
+        # Also style the Listbox that pops up (option_add)
+        self.option_add("*TCombobox*Listbox.background",   P["INPUT"])
+        self.option_add("*TCombobox*Listbox.foreground",   P["FG"])
+        self.option_add("*TCombobox*Listbox.selectBackground", self.ACC)
+        self.option_add("*TCombobox*Listbox.selectForeground", acc_fg(self.ACC))
+        self.option_add("*TCombobox*Listbox.font",         FM(9))
 
     # ── quality visibility per mode ──────────────────────────────────────────
     def _update_quality_visibility(self, mode):
@@ -736,6 +816,43 @@ class Oxygen(tk.Tk):
             # Video + audio: show resolution + video format
             self._res_frame.pack(side="left", padx=(0, 6))
             self._vfmt_frame.pack(side="left")
+
+    # ── log toggle ───────────────────────────────────────────────────────────
+    def _toggle_log(self):
+        self._log_visible = not self._log_visible
+        self.cfg["log_visible"] = self._log_visible
+        save_cfg(self.cfg)
+        self._apply_log_visibility()
+
+    def _apply_log_visibility(self):
+        P = self.P
+        if self._log_visible:
+            self._bottom_spacer.pack_forget()
+            self._log_frame.pack(padx=50, pady=(4, 16), fill="both", expand=True)
+            self._log_toggle_btn.config(text="▲  log", fg=P["FG2"])
+            # Restore window to taller size if it was collapsed
+            if self.winfo_height() < 480:
+                self.geometry(f"{self.winfo_width()}x580")
+        else:
+            self._log_frame.pack_forget()
+            self._bottom_spacer.pack(pady=(4, 16), fill="both", expand=True)
+            self._log_toggle_btn.config(text="▼  log", fg=P["MUTED"])
+            # Shrink window
+            self.after(10, lambda: self.geometry(
+                f"{self.winfo_width()}x{self._compact_height()}"))
+
+    def _compact_height(self):
+        """Calculate the height needed when log is hidden."""
+        self.update_idletasks()
+        h = 0
+        for w in [self._top_frame, self._logo_frame, self._inp_wrap,
+                  self._ctrl_frame, self._qrow, self.dl_btn, self.pb,
+                  self._log_toggle_bar]:
+            try:
+                h += w.winfo_reqheight() + 8
+            except Exception:
+                pass
+        return max(380, min(h + 50, 480))
 
     # ── logo loader ──────────────────────────────────────────────────────────
     def _load_logo(self):
@@ -791,9 +908,11 @@ class Oxygen(tk.Tk):
         P = self.P
         for v, b in self._mbtn.items():
             if v == val:
-                b.config(bg=self.ACC_BG, fg=P["FG"])
+                b.config(bg=self.ACC_BG, fg=self.ACC_BTN_FG,
+                         activeforeground=self.ACC_BTN_FG)
             else:
-                b.config(bg=P["BTN"], fg=P["MUTED"])
+                b.config(bg=P["BTN"], fg=P["MUTED"],
+                         activeforeground=P["FG"])
         self._update_quality_visibility(val)
 
     # ── playlist toggle ──────────────────────────────────────────────────────
@@ -1077,7 +1196,13 @@ class Oxygen(tk.Tk):
             return
 
         self._last_file = filepath
+        fname = os.path.basename(filepath) if filepath else "file"
         self._log(self.tr["status_ready"].split("·")[0].strip())
+        # OS notification
+        threading.Thread(
+            target=send_notification,
+            args=("Oxygen — Download Complete", fname),
+            daemon=True).start()
         self._show_done_dialog(filepath, out_dir)
         self.after(5000, lambda: self._update_status_bar("idle"))
 
@@ -1473,6 +1598,7 @@ class Oxygen(tk.Tk):
             lbl = tr[{"auto":"mode_auto","audio":"mode_audio","mute":"mode_mute"}[v]]
             b.config(text=lbl, bg=P["BTN"], fg=P["MUTED"],
                      activebackground=P["INPUT"], activeforeground=P["FG"])
+        self._mode_frame.config(bg=P["BTN"], highlightbackground=P["BORDER"])
         self._set_mode(self.mode.get())
 
         if self._playlist_on:
@@ -1509,6 +1635,12 @@ class Oxygen(tk.Tk):
         self.log_box.config(bg=P["LOG_BG"], fg=P["LOG_FG"])
         self._log_sb.config(bg=P["LOG_BG"], troughcolor=P["LOG_BG"],
                              activebackground=P["BORDER"])
+        self._log_toggle_bar.config(bg=P["BG"])
+        self._bottom_spacer.config(bg=P["BG"])
+        vis_fg = P["FG2"] if self._log_visible else P["MUTED"]
+        self._log_toggle_btn.config(
+            bg=P["BG"], fg=vis_fg,
+            activebackground=P["BG"], activeforeground=P["FG"])
 
 # ─── entry point ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
