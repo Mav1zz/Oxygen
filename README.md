@@ -19,6 +19,14 @@ Supports YouTube, SoundCloud, X, Instagram, and 1000+ sites.
 
 ---
 
+<!-- ╔══════════════════════════════════════════════════╗ -->
+<!--              QUICK START BANNER                      -->
+<!-- ╚══════════════════════════════════════════════════╝ -->
+
+<div align="center">
+   <img src="github/main_banner.png" width="100%" alt="Banner 1">
+</div>
+
 ## 🛠️ Built With
 
 > Tools, libraries, and technologies used in this project.
@@ -57,14 +65,6 @@ yt-dlp supports **1000+ websites** out of the box. Below are some of the most po
 </details>
 
 ---
-
-<!-- ╔══════════════════════════════════════════════════╗ -->
-<!--              QUICK START BANNER                      -->
-<!-- ╚══════════════════════════════════════════════════╝ -->
-
-<div align="center">
-   <img src="github/main_banner.png" width="100%" alt="Banner 1">
-</div>
 
 ## ⚡ Quick Start
 
