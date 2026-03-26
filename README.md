@@ -15,12 +15,6 @@ Supports YouTube, SoundCloud, X, Instagram, and 1000+ sites.
 [![yt-dlp](https://img.shields.io/badge/yt--dlp-latest-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://github.com/yt-dlp/yt-dlp)
 [![FFmpeg](https://img.shields.io/badge/FFmpeg-required-007808?style=for-the-badge&logo=ffmpeg&logoColor=white)](https://ffmpeg.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
-
-<br/>
-
-🌐 **Language / Dil:**
-&nbsp;[🇬🇧 English](README.md)&nbsp;&nbsp;|&nbsp;&nbsp;[🇹🇷 Türkçe](README_TR.md)
-
 </div>
 
 ---
