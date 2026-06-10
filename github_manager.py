@@ -594,9 +594,13 @@ def screen_setup():
 def run_git(cmd, cwd="."):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
-        return r.returncode, r.stdout.strip(), r.stderr.strip()
+        stdout = (r.stdout or "").strip()
+        stderr = (r.stderr or "").strip()
+        return r.returncode, stdout, stderr
     except FileNotFoundError:
         return -1, "", "git not found"
+    except Exception as e:
+        return -1, "", str(e)
 
 def screen_push(cfg):
     rows, cols = tsz()
