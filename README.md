@@ -20,10 +20,6 @@ python oxygen.py
 2. Double-click **`build.bat`**
 3. Find `Oxygen.exe` inside `dist\Oxygen\`
 
-The build uses `--onedir`, disables UPX compression, and embeds the Windows
-version metadata from `version.txt` to reduce antivirus heuristic detections.
-This does not replace code signing or a Microsoft false-positive submission.
-
 > **ffmpeg:** Download from https://ffmpeg.org/download.html  
 > Pick the Windows build → extract → copy `ffmpeg.exe` here.
 
