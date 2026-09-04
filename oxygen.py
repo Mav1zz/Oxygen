@@ -1,13 +1,9 @@
-"""
-Oxygen – Multi-platform media downloader  v3.0
-Supports: YouTube · SoundCloud · X (Twitter) · Instagram · and 1000+ more via yt-dlp
-Features: Playlist · Resolution/Format/Quality selection · Responsive UI · About · Drag & Drop
-"""
-
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-import threading, subprocess, sys, os, json, shutil, platform, re, time, webbrowser
+import threading, subprocess, sys, os, json, shutil, platform, re, time, webbrowser, base64
+import urllib.request
 import configparser
+import ctypes as ct
 
 # ─── cross-platform font ──────────────────────────────────────────────────────
 _SYS = platform.system()
@@ -49,6 +45,39 @@ def _app_data_dir():
     os.makedirs(folder, exist_ok=True)
     return folder
 
+__version__ = "1.0.0"
+UPDATE_VERSION_URL = "https://raw.githubusercontent.com/Mav1zz/Oxygen_version/refs/heads/main/version.txt"
+UPDATE_VERSION_API = "https://api.github.com/repos/Mav1zz/Oxygen_version/contents/version.txt?ref=main"
+
+def _version_tuple(value):
+    """Parse a version.txt value such as v3.2 or 3.2.1."""
+    match = re.fullmatch(r"v?(\d+)(?:\.(\d+))?(?:\.(\d+))?", value.strip(), re.IGNORECASE)
+    if not match:
+        raise ValueError(f"Invalid version: {value!r}")
+    return tuple(int(part or 0) for part in match.groups())
+
+def dark_title_bar(window, dark=True):
+    """Toggle the Windows title bar between dark and light mode."""
+    if _SYS != "Windows":
+        return
+    try:
+        window.update_idletasks()
+        hwnd = window.winfo_id()
+        if not hwnd:
+            return
+        try:
+            parent = ct.windll.user32.GetParent(hwnd)
+            if parent:
+                hwnd = parent
+        except Exception:
+            pass
+        DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+        set_window_attribute = ct.windll.dwmapi.DwmSetWindowAttribute
+        value = ct.c_int(1 if dark else 0)
+        set_window_attribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ct.byref(value), ct.sizeof(value))
+    except Exception:
+        pass
+
 CFG_PATH = os.path.join(_app_data_dir(), "config.json")
 ICON_PATH = os.path.join(BASE_DIR, "oxygen.ico")
 LOGO_PNG  = os.path.join(BASE_DIR, "oxygen.png")
@@ -86,6 +115,10 @@ BUILTIN_EN = {
     "done_show_folder":         "📁  show folder",
     "done_close":               "✕  close",
     "status_ready":             "oxygen ready  ·  paste a link and download",
+    "check_updates":            "Check for updates",
+    "update_available":         "Update available: {version}\nDownload now?",
+    "up_to_date":               "You are up to date ({version}).",
+    "update_check_failed":      "Update check failed: {err}",
     "status_auto_paste":        "🔗 link auto-detected and pasted",
     "warn_no_link":             "Please paste a link first.",
     "err_title":                "Oxygen – Error",
@@ -106,7 +139,7 @@ BUILTIN_EN = {
     "playlist_done":            "✓  playlist complete – {count} items downloaded",
     # ── about ──
     "about_title":              "About",
-    "about_version":            "v3.0",
+    "about_version":            "v3.1",
     "about_desc":               "Multi-platform media downloader\npowered by yt-dlp",
     "about_github":             "GitHub",
     "about_youtube":            "YouTube",
@@ -159,6 +192,10 @@ PALETTES = {
         "MUTED":   "#505050",
         "LOG_BG":  "#080808",
         "LOG_FG":  "#888888",
+        "LOG_INFO": "#dfe7ff",
+        "LOG_SUCCESS": "#7ef0aa",
+        "LOG_WARN": "#f7d46b",
+        "LOG_ERROR": "#ff7d7d",
         "BTN":     "#151515",
         "IS_DARK": True,
     },
@@ -172,6 +209,10 @@ PALETTES = {
         "MUTED":   "#777777",
         "LOG_BG":  "#1e1e1e",
         "LOG_FG":  "#aaaaaa",
+        "LOG_INFO": "#dfe7ff",
+        "LOG_SUCCESS": "#7ef0aa",
+        "LOG_WARN": "#f7d46b",
+        "LOG_ERROR": "#ff7d7d",
         "BTN":     "#2a2a2a",
         "IS_DARK": True,
     },
@@ -185,6 +226,10 @@ PALETTES = {
         "MUTED":   "#777777",
         "LOG_BG":  "#f8f8f8",
         "LOG_FG":  "#444444",
+        "LOG_INFO": "#1e3a8a",
+        "LOG_SUCCESS": "#0f7d4b",
+        "LOG_WARN": "#9a6200",
+        "LOG_ERROR": "#b42318",
         "BTN":     "#d8d8d8",
         "IS_DARK": False,
     },
@@ -210,6 +255,9 @@ DEFAULT_CFG = {
     "cookie_browser": "none",
     "cookie_file":    "",
     "log_visible":    False,
+    "update_url":     "",
+    "enable_update_check": True,
+    "auto_check_update": False,
 }
 
 def load_cfg():
@@ -218,6 +266,16 @@ def load_cfg():
             d = json.load(f)
         for k, v in DEFAULT_CFG.items():
             d.setdefault(k, v)
+        if d.get("app_theme") not in PALETTES:
+            d["app_theme"] = DEFAULT_CFG["app_theme"]
+        if not isinstance(d.get("theme_color"), str) or not re.fullmatch(
+                r"#[0-9a-fA-F]{6}", d["theme_color"]):
+            d["theme_color"] = DEFAULT_CFG["theme_color"]
+        if not isinstance(d.get("download_dir"), str) or not d["download_dir"].strip():
+            d["download_dir"] = DEFAULT_CFG["download_dir"]
+        for key in ["auto_paste", "log_visible", "enable_update_check", "auto_check_update"]:
+            if not isinstance(d.get(key), bool):
+                d[key] = DEFAULT_CFG[key]
         return d
     except Exception:
         return dict(DEFAULT_CFG)
@@ -478,6 +536,13 @@ def draw_gradient(canvas, w, h, color, bg):
         c = blend(bg, color, t)
         canvas.create_line(0, y, w, y, fill=c)
 
+
+def _hex_to_int(hex_color):
+    hx = hex_color.lstrip("#")
+    if len(hx) == 3:
+        hx = "".join(ch * 2 for ch in hx)
+    return int(hx, 16)
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # QUALITY / FORMAT OPTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -521,7 +586,10 @@ class Oxygen(tk.Tk):
         self.geometry(f"{self._W}x{self._H}+{(sw-self._W)//2}+{(sh-self._H)//2}")
         self.minsize(self._MIN_W, self._MIN_H)
         self.configure(bg=self._pal["BG"])
-
+        self.update_idletasks()
+        self.bind("<Configure>", self._on_window_configure)
+        self.bind("<Map>", self._on_window_configure)
+        self._sync_titlebar_mode()
         set_window_icon(self)
 
         self.mode         = tk.StringVar(value="auto")
@@ -545,6 +613,14 @@ class Oxygen(tk.Tk):
         self._start_clip_watcher()
         self.after(300, lambda: threading.Thread(
             target=ensure_deps, args=(self._log, self.tr), daemon=True).start())
+        # Auto-check for updates on startup if configured and enabled
+        if self.cfg.get("enable_update_check") and self.cfg.get("auto_check_update"):
+            def _auto_check():
+                try:
+                    self.after(0, lambda: self._check_for_updates(show_result=True))
+                except Exception:
+                    pass
+            threading.Thread(target=_auto_check, daemon=True).start()
 
     # ── theme / palette shorthands ───────────────────────────────────────────
     @property
@@ -562,6 +638,17 @@ class Oxygen(tk.Tk):
     @property
     def ACC_FG(self): return acc_fg(self.ACC)
 
+    def _on_window_configure(self, event=None):
+        self.after_idle(lambda: dark_title_bar(self, self.P.get("IS_DARK", True)))
+
+    def _sync_titlebar_mode(self):
+        self.update_idletasks()
+        dark_title_bar(self, self.P.get("IS_DARK", True))
+        self.after_idle(lambda: dark_title_bar(self, self.P.get("IS_DARK", True)))
+
+    def _apply_titlebar_color(self):
+        self._sync_titlebar_mode()
+
     # ── build UI ─────────────────────────────────────────────────────────────
     def _build_ui(self):
         P  = self.P
@@ -578,13 +665,6 @@ class Oxygen(tk.Tk):
         self._lbl_sub = tk.Label(self._top_frame, text=tr["subtitle"],
             font=F(10), bg=P["BG"], fg=P["MUTED"])
         self._lbl_sub.pack(side="left", padx=8)
-
-        badge_row = tk.Frame(self._top_frame, bg=P["BG"])
-        badge_row.pack(side="left", padx=8)
-        for plat, col, tfg in [("YT","#ff0000","#fff"),("SC","#ff5500","#000"),
-                                 ("𝕏","#ffffff","#000"),("IG","#e1306c","#fff")]:
-            tk.Label(badge_row, text=plat, font=F(8, "bold"),
-                     bg=col, fg=tfg, padx=5, pady=1).pack(side="left", padx=2)
 
         self._gear_btn = tk.Button(
             self._top_frame, text="⚙", font=F(14),
@@ -682,7 +762,7 @@ class Oxygen(tk.Tk):
         self._qrow = tk.Frame(self, bg=P["BG"])
         self._qrow.pack(padx=50, pady=(8,0), fill="x")
 
-        # ttk combobox style
+        self._combo_widgets = []
         self._apply_combo_style()
 
         def _qlabel(parent, text):
@@ -690,10 +770,40 @@ class Oxygen(tk.Tk):
                 bg=P["BG"], fg=P["MUTED"]).pack(side="left", padx=(0,3))
 
         def _qcombo(parent, var, values, width=10):
-            cb = ttk.Combobox(parent, textvariable=var, values=values,
-                state="readonly", font=F(9), width=width, style="Q.TCombobox")
-            cb.pack(side="left", padx=(0,4))
-            return cb
+            def _render_label():
+                try:
+                    val = str(var.get())
+                except Exception:
+                    val = ""
+                btn.config(text=f"{val}   ▾")
+
+            btn = tk.Button(parent, text="",
+                font=F(9), width=width, justify="left",
+                bg=P["INPUT"], fg=P["FG"],
+                activebackground=P["INPUT"], activeforeground=P["FG"],
+                relief="flat", bd=1, padx=8, pady=5,
+                highlightbackground=P["BORDER"], highlightthickness=1,
+                cursor="hand2")
+            btn.bind("<<ThemeChanged>>", lambda _event=None: _render_label())
+            var.trace_add("write", lambda *_: _render_label())
+            menu = tk.Menu(btn, tearoff=0, bg=P["INPUT"], fg=P["FG"],
+                activebackground=self.ACC, activeforeground=acc_fg(self.ACC),
+                selectcolor=self.ACC, bd=0, relief="flat")
+            for val in values:
+                menu.add_command(label=val, command=lambda v=val: var.set(v))
+
+            def _open_menu(_=None):
+                menu.config(bg=P["INPUT"], fg=P["FG"],
+                            activebackground=self.ACC,
+                            activeforeground=acc_fg(self.ACC),
+                            selectcolor=self.ACC)
+                menu.post(btn.winfo_rootx(), btn.winfo_rooty() + btn.winfo_height())
+
+            btn.configure(command=_open_menu)
+            _render_label()
+            btn.pack(side="left", padx=(0,4))
+            self._combo_widgets.append((btn, menu))
+            return btn
 
         # Resolution (video / auto / mute modes)
         self._res_frame = tk.Frame(self._qrow, bg=P["BG"])
@@ -762,6 +872,7 @@ class Oxygen(tk.Tk):
         self.log_box.config(yscrollcommand=self._log_sb.set)
         self.log_box.pack(side="left", fill="both", expand=True, padx=8, pady=5)
         self._log_sb.pack(side="right", fill="y")
+        self._apply_log_tags()
 
         # ── bottom spacer (visible when log is hidden, centers content) ───────
         self._bottom_spacer = tk.Frame(self, bg=P["BG"], height=1)
@@ -775,28 +886,28 @@ class Oxygen(tk.Tk):
     # ── combo style ──────────────────────────────────────────────────────────
     def _apply_combo_style(self):
         P = self.P
-        style = ttk.Style(self)
-        style.configure("Q.TCombobox",
-            fieldbackground=P["INPUT"],
-            background=P["BTN"],
-            foreground=P["FG"],
-            selectbackground=self.ACC,
-            selectforeground=acc_fg(self.ACC),
-            arrowcolor=P["FG2"],
-            insertcolor=P["FG"],
-            padding=(4, 2))
-        style.map("Q.TCombobox",
-            fieldbackground=[("readonly", P["INPUT"]), ("focus", P["INPUT"])],
-            foreground=[("readonly", P["FG"]), ("focus", P["FG"])],
-            selectbackground=[("readonly", self.ACC)],
-            selectforeground=[("readonly", acc_fg(self.ACC))],
-            arrowcolor=[("disabled", P["MUTED"]), ("pressed", P["FG"])])
-        # Also style the Listbox that pops up (option_add)
-        self.option_add("*TCombobox*Listbox.background",   P["INPUT"])
-        self.option_add("*TCombobox*Listbox.foreground",   P["FG"])
-        self.option_add("*TCombobox*Listbox.selectBackground", self.ACC)
-        self.option_add("*TCombobox*Listbox.selectForeground", acc_fg(self.ACC))
-        self.option_add("*TCombobox*Listbox.font",         FM(9))
+        if hasattr(self, "_combo_widgets"):
+            for combo, menu in self._combo_widgets:
+                combo.config(bg=P["INPUT"], fg=P["FG"],
+                            activebackground=P["INPUT"], activeforeground=P["FG"],
+                            highlightbackground=P["BORDER"], relief="flat",
+                            highlightthickness=1)
+                menu.config(bg=P["INPUT"], fg=P["FG"],
+                            activebackground=self.ACC,
+                            activeforeground=acc_fg(self.ACC),
+                            selectcolor=self.ACC)
+                try:
+                    combo.config(text=f"{combo.cget('text').replace('▾', '').strip()}   ▾")
+                except Exception:
+                    pass
+
+    def _apply_log_tags(self):
+        P = self.P
+        self.log_box.tag_configure("info", foreground=P["LOG_INFO"])
+        self.log_box.tag_configure("success", foreground=P["LOG_SUCCESS"])
+        self.log_box.tag_configure("warn", foreground=P["LOG_WARN"])
+        self.log_box.tag_configure("error", foreground=P["LOG_ERROR"])
+        self.log_box.tag_configure("default", foreground=P["LOG_FG"])
 
     # ── quality visibility per mode ──────────────────────────────────────────
     def _update_quality_visibility(self, mode):
@@ -829,15 +940,13 @@ class Oxygen(tk.Tk):
         if self._log_visible:
             self._bottom_spacer.pack_forget()
             self._log_frame.pack(padx=50, pady=(4, 16), fill="both", expand=True)
-            self._log_toggle_btn.config(text="▲  log", fg=P["FG2"])
-            # Restore window to taller size if it was collapsed
+            self._log_toggle_btn.config(text="▴  log", fg=P["FG2"])
             if self.winfo_height() < 480:
                 self.geometry(f"{self.winfo_width()}x580")
         else:
             self._log_frame.pack_forget()
             self._bottom_spacer.pack(pady=(4, 16), fill="both", expand=True)
-            self._log_toggle_btn.config(text="▼  log", fg=P["MUTED"])
-            # Shrink window
+            self._log_toggle_btn.config(text="▾  log", fg=P["MUTED"])
             self.after(10, lambda: self.geometry(
                 f"{self.winfo_width()}x{self._compact_height()}"))
 
@@ -944,18 +1053,15 @@ class Oxygen(tk.Tk):
 
     # ── clipboard watcher ────────────────────────────────────────────────────
     def _start_clip_watcher(self):
-        def watch():
-            while True:
-                try:
-                    if self.cfg.get("auto_paste", True):
-                        clip = self.clipboard_get().strip()
-                        if clip != self._last_clip and looks_like_url(clip):
-                            self._last_clip = clip
-                            self.after(0, self._auto_paste, clip)
-                except Exception:
-                    pass
-                time.sleep(1)
-        threading.Thread(target=watch, daemon=True).start()
+        if self.cfg.get("auto_paste", True):
+            try:
+                clip = self.clipboard_get().strip()
+                if clip != self._last_clip and looks_like_url(clip):
+                    self._last_clip = clip
+                    self._auto_paste(clip)
+            except Exception:
+                pass
+        self.after(1000, self._start_clip_watcher)
 
     def _auto_paste(self, txt):
         cur = self.url_entry.get()
@@ -980,7 +1086,19 @@ class Oxygen(tk.Tk):
     def _log(self, msg):
         def _do():
             self.log_box.config(state="normal")
-            self.log_box.insert("end", msg+"\n")
+            tag = "default"
+            lowered = msg.lower()
+            if "✓" in msg or "ready" in lowered or "complete" in lowered:
+                tag = "success"
+            elif "⚠" in msg or "hata" in lowered or "error" in lowered or "failed" in lowered:
+                tag = "warn"
+            elif "✗" in msg or "hata:" in lowered or "fatal" in lowered:
+                tag = "error"
+            elif "format:" in lowered:
+                tag = "default"
+            elif "▶" in msg or "installing" in lowered:
+                tag = "info"
+            self.log_box.insert("end", msg + "\n", tag)
             self.log_box.see("end")
             self.log_box.config(state="disabled")
         try: self.after(0, _do)
@@ -1058,6 +1176,11 @@ class Oxygen(tk.Tk):
                 "retries":           5,
                 "fragment_retries":  5,
                 "socket_timeout":    30,
+                "extractor_args": {
+                    "youtube": {
+                        "player_client": ["android", "web"]
+                    }
+                },
                 "http_headers": {
                     "User-Agent": (
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -1066,21 +1189,21 @@ class Oxygen(tk.Tk):
                     ),
                     "Accept-Language": "en-US,en;q=0.9",
                 },
-                "extractor_args": {
-                    "youtube": {"skip": ["webpage", "configs"]}
-                }
             }
 
             # ── cookie bypass (fixes YouTube 403) ─────────────────────────
-            # Use cookies.txt file if available (most reliable - avoids DPAPI issues)
+            # Prefer explicit cookies.txt; if not provided, use the browser cookies
+            # selected in Settings. This is the real fix for YouTube 403s.
             cookie_file = self.cfg.get("cookie_file", "").strip()
+            browser = self.cfg.get("cookie_browser", "none")
             if cookie_file and os.path.isfile(cookie_file):
                 opts["cookiefile"] = cookie_file
                 self._log(f"  🍪 cookies.txt: {os.path.basename(cookie_file)}")
+            elif browser and browser != "none":
+                opts["cookiesfrombrowser"] = (browser,)
+                self._log(f"  🍪 browser cookies: {browser}")
             else:
-                # Don't use browser cookies - DPAPI errors on Windows are too common
-                # Better to fail gracefully than hang on cookie extraction
-                self._log(f"  🍪 settings'den cookies.txt seçin (tavsiye edilir)")
+                self._log("  🍪 YouTube 403 için browser cookies veya cookies.txt gerekiyordur")
 
             # ── playlist ──────────────────────────────────────────────────
             if self._playlist_on:
@@ -1148,7 +1271,20 @@ class Oxygen(tk.Tk):
                     )
                 opts["merge_output_format"] = vfmt
 
-            self._log(f"  format: {opts['format']}")
+            def _downloaded_files():
+                files = []
+                for root, _, names in os.walk(out_dir):
+                    for name in names:
+                        if not name.endswith(".part"):
+                            files.append(os.path.join(root, name))
+                return set(files)
+
+            if mode == "audio":
+                self._log(f"  format: audio ({afmt.upper()} / quality {aq})")
+            elif mode == "mute":
+                self._log(f"  format: video only ({res} / {vfmt.upper()})")
+            else:
+                self._log(f"  format: video + audio ({res} / {vfmt.upper()})")
 
             def _run_download(download_opts):
                 with yt_dlp.YoutubeDL(download_opts) as ydl:
@@ -1156,10 +1292,19 @@ class Oxygen(tk.Tk):
                     if retcode != 0:
                         self._log(f"  ⚠ yt-dlp returned code {retcode}")
 
+            files_before = _downloaded_files()
             try:
                 _run_download(opts)
             except Exception as dl_err:
                 err_str = str(dl_err)
+                if "Could not copy" in err_str and "cookie database" in err_str:
+                    raise RuntimeError(
+                        f"{browser.title()} cookie database could not be read.\n\n"
+                        f"Close {browser.title()} completely (including background processes) "
+                        "and try again.\n"
+                        "If it still fails, export a Netscape cookies.txt file and select it "
+                        "in Settings."
+                    ) from dl_err
                 # DPAPI or cookie decryption errors
                 if "DPAPI" in err_str or "decrypt" in err_str.lower():
                     self._log("  ⚠ Windows DPAPI şifre çözme hatası")
@@ -1202,23 +1347,35 @@ class Oxygen(tk.Tk):
                                 "Veya settings'den cookies.txt dosyası seçin."
                             )
                         raise
+                elif "403" in err_str or "Forbidden" in err_str:
+                    raise RuntimeError(
+                        "YouTube blocked the media request (HTTP 403).\n\n"
+                        "Select your browser in Settings, then close the browser "
+                        "completely and try again. For reliable access, export a "
+                        "Netscape cookies.txt file and select it in Settings."
+                    ) from dl_err
                 else:
                     raise
 
-            if self._playlist_on and len(saved) > 1:
-                self._log(self.tr["playlist_done"].format(count=len(saved)))
+            downloaded = sorted(_downloaded_files() - files_before,
+                                key=os.path.getmtime)
+            if not downloaded:
+                raise RuntimeError("Download finished without creating a file.")
+            if self._playlist_on and len(downloaded) > 1:
+                self._log(self.tr["playlist_done"].format(count=len(downloaded)))
 
-            final = saved[-1] if saved else None
+            final = downloaded[-1]
             self.after(0, self._on_done, True, final, out_dir)
 
         except Exception as e:
             import traceback
-            tb = traceback.format_exc()
-            self._log(f"  ✗ HATA: {e}")
+            clean_error = re.sub(r"\x1b\[[0-9;]*m", "", str(e))
+            tb = re.sub(r"\x1b\[[0-9;]*m", "", traceback.format_exc())
+            self._log(f"  ✗ HATA: {clean_error}")
             # Log full traceback to help debug
             for line in tb.splitlines():
                 self._log(f"    {line}")
-            self.after(0, self._on_done, False, None, out_dir, str(e))
+            self.after(0, self._on_done, False, None, out_dir, clean_error)
 
     def _on_done(self, ok, filepath, out_dir, err=""):
         self.pb.stop()
@@ -1252,27 +1409,36 @@ class Oxygen(tk.Tk):
         d.title(self.tr["title"] + " – done")
         d.configure(bg=P["BG2"])
         d.resizable(False, False)
-        W2, H2 = 420, 210
+        W2, H2 = 420, 182
         cx = self.winfo_x() + (self.winfo_width()  - W2) // 2
         cy = self.winfo_y() + (self.winfo_height() - H2) // 2
         d.geometry(f"{W2}x{H2}+{cx}+{cy}")
         d.grab_set()
+        d.overrideredirect(False)
         set_window_icon(d)
 
-        tk.Label(d, text=tr["done_title"],
-            font=F(12, "bold"), bg=P["BG2"], fg=P["FG"]
-            ).pack(pady=(22,4))
+        header = tk.Frame(d, bg=P["BG2"])
+        header.pack(fill="x", padx=18, pady=(18, 10))
+
+        title_box = tk.Frame(header, bg=P["BG2"])
+        title_box.pack(side="left")
+        tk.Label(title_box, text=tr["done_title"],
+                 font=F(12, "bold"), bg=P["BG2"], fg=P["FG"]).pack(anchor="w")
 
         fname = os.path.basename(filepath) if filepath else "file"
-        tk.Label(d, text=(fname[:44]+"…") if len(fname)>47 else fname,
-            font=FM(9), bg=P["BG2"], fg=P["MUTED"], wraplength=380
-            ).pack(pady=(0,2))
-        tk.Label(d, text=f"📁  {folder}",
-            font=F(9), bg=P["BG2"], fg=P["MUTED"]
-            ).pack(pady=(0,16))
+        display_name = (fname[:44] + "…") if len(fname) > 47 else fname
+        info_card = tk.Frame(d, bg=P["BG"], highlightbackground=P["BORDER"], highlightthickness=1)
+        info_card.pack(fill="x", padx=18, pady=(0, 8))
+
+        tk.Label(info_card, text=display_name,
+                 font=FM(9), bg=P["BG"], fg=P["FG"],
+                 wraplength=330, justify="left", anchor="w").pack(anchor="w", padx=12, pady=(10, 4))
+        tk.Label(info_card, text=f"📁  {folder}",
+                 font=F(8), bg=P["BG"], fg=P["MUTED"],
+                 wraplength=330, justify="left", anchor="w").pack(anchor="w", padx=12, pady=(0, 10))
 
         br = tk.Frame(d, bg=P["BG2"])
-        br.pack()
+        br.pack(padx=18, pady=0, fill="x")
 
         def _open():
             if filepath and os.path.exists(filepath):
@@ -1285,28 +1451,48 @@ class Oxygen(tk.Tk):
             d.destroy()
 
         def _show():
-            if _SYS == "Windows":
-                if filepath and os.path.exists(filepath):
-                    subprocess.Popen(["explorer", "/select,", filepath])
+            try:
+                if _SYS == "Windows":
+                    folder_path = os.path.normpath(folder)
+                    if filepath and os.path.exists(filepath):
+                        try:
+                            subprocess.Popen(["explorer", "/select,", filepath], shell=False)
+                        except Exception:
+                            os.startfile(folder_path)
+                    else:
+                        os.startfile(folder_path)
+                elif _SYS == "Darwin":
+                    subprocess.Popen(["open", "-R", filepath] if filepath and os.path.exists(filepath) else ["open", folder])
                 else:
-                    subprocess.Popen(["explorer", folder])
-            elif _SYS == "Darwin":
-                subprocess.Popen(["open", "-R", filepath] if filepath and os.path.exists(filepath) else ["open", folder])
-            else:
-                subprocess.Popen(["xdg-open", folder])
-            d.destroy()
+                    subprocess.Popen(["xdg-open", folder])
+            except Exception:
+                try:
+                    if filepath and os.path.exists(filepath):
+                        os.startfile(os.path.dirname(filepath))
+                    else:
+                        os.startfile(folder)
+                except Exception:
+                    pass
+            finally:
+                d.destroy()
 
-        for txt, cmd, bg in [
+        action_style = [
             (tr["done_open"],        _open,     self.ACC),
             (tr["done_show_folder"], _show,     P["BTN"]),
             (tr["done_close"],       d.destroy, P["BTN"]),
-        ]:
+        ]
+
+        for i, (txt, cmd, bg) in enumerate(action_style):
             fg = acc_fg(bg) if bg == self.ACC else P["FG"]
-            tk.Button(br, text=txt, font=F(9, "bold"),
+            btn = tk.Button(br, text=txt, font=F(9, "bold"),
                 bg=bg, fg=fg,
                 activebackground=darken(bg,0.85), activeforeground=fg,
-                relief="flat", bd=0, padx=14, pady=7,
-                cursor="hand2", command=cmd).pack(side="left", padx=5)
+                relief="flat", bd=0, padx=14, pady=8,
+                cursor="hand2", command=cmd)
+            btn.pack(side="left", fill="x", expand=True, padx=(0 if i == 0 else 8, 0))
+
+        br.update_idletasks()
+        br.configure(height=40)
 
     # ── about window ─────────────────────────────────────────────────────────
     def _open_about(self):
@@ -1345,7 +1531,7 @@ class Oxygen(tk.Tk):
 
         tk.Label(d, text=tr["title"],
             font=F(16, "bold"), bg=P["BG2"], fg=P["FG"]).pack(pady=(4,0))
-        tk.Label(d, text=tr["about_version"],
+        tk.Label(d, text=f"v{__version__}",
             font=F(10), bg=P["BG2"], fg=self.ACC).pack(pady=(0,4))
         tk.Label(d, text=tr["about_desc"],
             font=F(9), bg=P["BG2"], fg=P["MUTED"],
@@ -1372,11 +1558,77 @@ class Oxygen(tk.Tk):
             btn.pack(side="left", padx=6)
 
         tk.Frame(d, bg=P["BORDER"], height=1).pack(fill="x", padx=40, pady=(16,0))
-        tk.Button(d, text=tr["about_close"],
+        btn_row = tk.Frame(d, bg=P["BG2"])
+        btn_row.pack(pady=14)
+        tk.Button(btn_row, text=tr["check_updates"],
             font=F(10), bg=P["BTN"], fg=P["FG2"],
             activebackground=P["INPUT"], relief="flat", bd=0,
             padx=18, pady=8, cursor="hand2",
-            command=d.destroy).pack(pady=14)
+            command=lambda: self._check_for_updates(True)).pack(side="left", padx=8)
+        tk.Button(btn_row, text=tr["about_close"],
+            font=F(10), bg=P["BTN"], fg=P["FG2"],
+            activebackground=P["INPUT"], relief="flat", bd=0,
+            padx=18, pady=8, cursor="hand2",
+            command=d.destroy).pack(side="left", padx=8)
+
+    def _check_for_updates(self, show_result=True):
+        repo = "Mav1zz/Oxygen"
+        try:
+            # version.txt is the single source of truth for the published version.
+            urls = [UPDATE_VERSION_API, UPDATE_VERSION_URL]
+            last_error = None
+            for update_url in urls:
+                try:
+                    separator = "&" if "?" in update_url else "?"
+                    cache_busted_url = f"{update_url}{separator}_oxygen_check={int(time.time())}"
+                    req = urllib.request.Request(
+                        cache_busted_url,
+                        headers={
+                            "User-Agent": "Oxygen Updater",
+                            "Cache-Control": "no-cache",
+                        })
+                    with urllib.request.urlopen(req, timeout=6) as response:
+                        response_text = response.read().decode("utf-8-sig")
+                    if update_url == UPDATE_VERSION_API:
+                        data = json.loads(response_text)
+                        latest_raw = base64.b64decode(data["content"]).decode("utf-8-sig").strip()
+                        lines = latest_raw.splitlines()
+                    else:
+                        lines = response_text.splitlines()
+                    latest_raw = next((line.strip() for line in lines if line.strip()), "")
+                    if not latest_raw:
+                        raise ValueError("version.txt is empty")
+                    break
+                except Exception as error:
+                    last_error = error
+            else:
+                raise RuntimeError(f"Could not fetch version.txt: {last_error}")
+
+            current_version = _version_tuple(__version__)
+            latest_version = _version_tuple(latest_raw)
+            newer = latest_version > current_version
+            version_message = (
+                f"Current version: v{__version__}\n"
+                f"Repository version: {latest_raw.lstrip('vV')}"
+            )
+
+            if newer:
+                if show_result:
+                    do_download = messagebox.askyesno(
+                        self.tr["title"],
+                        f"{version_message}\n\nUpdate available.\nDownload now?")
+                    if do_download:
+                        # Open the GitHub releases page for the user to download
+                        webbrowser.open(f"https://github.com/{repo}/releases")
+                return True
+            else:
+                if show_result:
+                    messagebox.showinfo(self.tr["title"], f"{version_message}\n\nYou are up to date.")
+                return False
+        except Exception as e:
+            if show_result:
+                messagebox.showwarning(self.tr["title"], self.tr["update_check_failed"].format(err=e))
+            return False
 
     # ── settings window ──────────────────────────────────────────────────────
     def _open_settings(self):
@@ -1386,28 +1638,31 @@ class Oxygen(tk.Tk):
         d.title(f"{tr['title']} – {tr['settings_title']}")
         d.configure(bg=P["BG2"])
         d.resizable(False, False)
-        W2, H2 = 460, 660
+        # Make the settings window larger so scrolling isn't necessary
+        W2, H2 = 720, 760
         cx = self.winfo_x() + (self.winfo_width()  - W2) // 2
         cy = self.winfo_y() + (self.winfo_height() - H2) // 2
         d.geometry(f"{W2}x{H2}+{cx}+{cy}")
         d.grab_set()
         set_window_icon(d)
 
-        tk.Label(d, text=tr["settings_title"],
+        # Use the toplevel window itself as the content container (no scrolling)
+        content = d
+        tk.Label(content, text=tr["settings_title"],
             font=F(13, "bold"), bg=P["BG2"], fg=P["FG"]
             ).pack(anchor="w", padx=24, pady=(20,14))
 
         def sep():
-            tk.Frame(d, bg=P["BORDER"], height=1).pack(fill="x", padx=24, pady=8)
+            tk.Frame(content, bg=P["BORDER"], height=1).pack(fill="x", padx=24, pady=8)
 
         def section(text):
-            tk.Label(d, text=text,
+            tk.Label(content, text=text,
                 font=F(8, "bold"), bg=P["BG2"], fg=P["MUTED"]
                 ).pack(anchor="w", padx=24, pady=(4,4))
 
         # ── theme color ─────────────────────────────────────────────────────
         section(tr["settings_theme_color"])
-        color_row = tk.Frame(d, bg=P["BG2"])
+        color_row = tk.Frame(content, bg=P["BG2"])
         color_row.pack(padx=24, fill="x")
         sel_color = tk.StringVar(value=self.cfg["theme_color"])
 
@@ -1433,7 +1688,7 @@ class Oxygen(tk.Tk):
 
         # ── app theme ────────────────────────────────────────────────────────
         section(tr["settings_app_theme"])
-        theme_row = tk.Frame(d, bg=P["BG2"])
+        theme_row = tk.Frame(content, bg=P["BG2"])
         theme_row.pack(padx=24, fill="x")
         sel_theme = tk.StringVar(value=self.cfg.get("app_theme","oled"))
 
@@ -1460,7 +1715,7 @@ class Oxygen(tk.Tk):
 
         # ── language ─────────────────────────────────────────────────────────
         section(tr["settings_language"])
-        lang_row = tk.Frame(d, bg=P["BG2"])
+        lang_row = tk.Frame(content, bg=P["BG2"])
         lang_row.pack(padx=24, fill="x")
         langs = get_available_langs()
         sel_lang = tk.StringVar(value=self.cfg.get("language","en"))
@@ -1474,7 +1729,7 @@ class Oxygen(tk.Tk):
 
         # ── download location ────────────────────────────────────────────────
         section(tr["settings_download_loc"])
-        dir_row = tk.Frame(d, bg=P["BG2"])
+        dir_row = tk.Frame(content, bg=P["BG2"])
         dir_row.pack(padx=24, fill="x")
         dir_var = tk.StringVar(value=self.cfg["download_dir"])
         tk.Entry(dir_row, textvariable=dir_var,
@@ -1498,7 +1753,7 @@ class Oxygen(tk.Tk):
 
         # ── auto-paste toggle ────────────────────────────────────────────────
         section(tr["settings_clipboard"])
-        ap_row = tk.Frame(d, bg=P["BG2"])
+        ap_row = tk.Frame(content, bg=P["BG2"])
         ap_row.pack(padx=24, fill="x")
         tk.Label(ap_row, text=tr["settings_auto_paste_lbl"],
             font=F(10), bg=P["BG2"], fg=P["FG2"]).pack(side="left")
@@ -1524,7 +1779,7 @@ class Oxygen(tk.Tk):
 
         # ── cookie browser (fixes YouTube 403) ──────────────────────────────
         section("YOUTUBE / COOKIE BYPASS")
-        ck_row = tk.Frame(d, bg=P["BG2"])
+        ck_row = tk.Frame(content, bg=P["BG2"])
         ck_row.pack(padx=24, fill="x")
         tk.Label(ck_row, text="Browser cookies (fixes 403 errors):",
             font=F(9), bg=P["BG2"], fg=P["FG2"]).pack(side="left", padx=(0,8))
@@ -1539,12 +1794,12 @@ class Oxygen(tk.Tk):
             font=F(8), bg=P["BG2"], fg=P["MUTED"]).pack(side="left")
 
         # cookies.txt (most reliable, works even when browser is open)
-        cf_frame = tk.Frame(d, bg=P["BG2"])
+        cf_frame = tk.Frame(content, bg=P["BG2"])
         cf_frame.pack(padx=24, pady=(6,0), fill="x")
         tk.Label(cf_frame, text="Or use cookies.txt file (most reliable):",
             font=F(9), bg=P["BG2"], fg=P["FG2"]).pack(anchor="w")
 
-        cf_row2 = tk.Frame(d, bg=P["BG2"])
+        cf_row2 = tk.Frame(content, bg=P["BG2"])
         cf_row2.pack(padx=24, pady=(2,0), fill="x")
         cookie_file_var = tk.StringVar(value=self.cfg.get("cookie_file", ""))
         tk.Entry(cf_row2, textvariable=cookie_file_var,
@@ -1567,13 +1822,43 @@ class Oxygen(tk.Tk):
             padx=8, pady=4, cursor="hand2",
             command=browse_cookie).pack(side="left")
 
-        tk.Label(d, text="  Tip: chrome://net-export or EditThisCookie ext → export Netscape format",
+        tk.Label(content, text="  Tip: chrome://net-export or EditThisCookie ext → export Netscape format",
             font=F(7), bg=P["BG2"], fg=P["MUTED"], anchor="w"
             ).pack(padx=24, anchor="w")
 
+        # ── updates settings ───────────────────────────────────────────
+        section(tr.get("settings_updates", "Updates"))
+        upd_opts = tk.Frame(content, bg=P["BG2"]) 
+        upd_opts.pack(padx=24, fill="x")
+
+        # nicer toggle buttons instead of plain checkboxes
+        enable_upd_var = tk.BooleanVar(value=self.cfg.get("enable_update_check", True))
+        auto_upd_var = tk.BooleanVar(value=self.cfg.get("auto_check_update", False))
+
+        def make_toggle(row_parent, label_text, var):
+            row = tk.Frame(row_parent, bg=P["BG2"])
+            row.pack(fill="x", pady=(6,4))
+            tk.Label(row, text=label_text, font=F(9), bg=P["BG2"], fg=P["FG2"]).pack(side="left")
+            def toggle():
+                var.set(not var.get())
+                v = var.get()
+                btn.config(text=tr["toggle_on"] if v else tr["toggle_off"],
+                           bg=self.ACC if v else P["BTN"],
+                           fg=acc_fg(self.ACC) if v else P["MUTED"])
+            btn = tk.Button(row, text=tr["toggle_on"] if var.get() else tr["toggle_off"],
+                font=F(8, "bold"), bg=self.ACC if var.get() else P["BTN"],
+                fg=acc_fg(self.ACC) if var.get() else P["MUTED"],
+                activebackground=P["INPUT"], relief="flat", bd=0,
+                padx=12, pady=4, cursor="hand2", command=toggle)
+            btn.pack(side="right")
+            return row, btn
+
+        make_toggle(upd_opts, tr.get("enable_update_check", "Enable update checks"), enable_upd_var)
+        make_toggle(upd_opts, tr.get("auto_check_update_label", "Auto-check on startup"), auto_upd_var)
+
         # ── save / cancel ────────────────────────────────────────────────────
-        tk.Frame(d, bg=P["BORDER"], height=1).pack(fill="x", padx=24, pady=(14,0))
-        btns = tk.Frame(d, bg=P["BG2"])
+        tk.Frame(content, bg=P["BORDER"], height=1).pack(fill="x", padx=24, pady=(14,0))
+        btns = tk.Frame(content, bg=P["BG2"])
         btns.pack(pady=14)
 
         def apply_save():
@@ -1584,6 +1869,9 @@ class Oxygen(tk.Tk):
             self.cfg["auto_paste"]     = ap_var.get()
             self.cfg["cookie_browser"] = sel_browser.get()
             self.cfg["cookie_file"]    = cookie_file_var.get().strip()
+            # updates
+            self.cfg["enable_update_check"] = bool(enable_upd_var.get())
+            self.cfg["auto_check_update"] = bool(auto_upd_var.get())
             save_cfg(self.cfg)
             self.tr   = load_lang(self.cfg["language"])
             self._pal = PALETTES[self.cfg["app_theme"]]
@@ -1609,6 +1897,7 @@ class Oxygen(tk.Tk):
         P  = self.P
         tr = self.tr
         self.configure(bg=P["BG"])
+        self._sync_titlebar_mode()
 
         self._top_frame.config(bg=P["BG"])
         self._lbl_title.config(bg=P["BG"], fg=P["FG"])
@@ -1671,6 +1960,7 @@ class Oxygen(tk.Tk):
 
         self._log_frame.config(bg=P["LOG_BG"], highlightbackground=P["BORDER"])
         self.log_box.config(bg=P["LOG_BG"], fg=P["LOG_FG"])
+        self._apply_log_tags()
         self._log_sb.config(bg=P["LOG_BG"], troughcolor=P["LOG_BG"],
                              activebackground=P["BORDER"])
         self._log_toggle_bar.config(bg=P["BG"])

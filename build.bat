@@ -58,8 +58,10 @@ echo.
 
 pyinstaller ^
     --onedir ^
+    --noupx ^
     --noconsole ^
     --name=Oxygen ^
+    --version-file=version.txt ^
     %ICON_ARG% ^
     %DATA_ARGS% ^
     %BINARY_ARGS% ^
@@ -89,13 +91,13 @@ if errorlevel 1 (
 echo.
 echo [4/4] Copying ffmpeg to output folder...
 if exist "ffmpeg.exe" (
-    copy /y "ffmpeg.exe" "dist\Oxygenfmpeg.exe" >nul 2>&1
+     copy /y "ffmpeg.exe" "dist\Oxygen\ffmpeg.exe" >nul 2>&1
     echo [OK] ffmpeg.exe copied to dist\Oxygen)
 if exist "ffplay.exe" (
-    copy /y "ffplay.exe" "dist\Oxygenfplay.exe" >nul 2>&1
+     copy /y "ffplay.exe" "dist\Oxygen\ffplay.exe" >nul 2>&1
 )
 if exist "ffprobe.exe" (
-    copy /y "ffprobe.exe" "dist\Oxygenfprobe.exe" >nul 2>&1
+     copy /y "ffprobe.exe" "dist\Oxygen\ffprobe.exe" >nul 2>&1
 )
 
 echo.
