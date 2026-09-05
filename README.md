@@ -63,10 +63,13 @@ yt-dlp supports **1000+ websites** out of the box. Below are some of the most po
 ---
 
 ## 🔽 Download
-> [Click me and Download ".zip"](https://github.com/Mav1zz/Oxygen/releases/tag/v26032026)
+> [Click here to go to the download page](https://github.com/Mav1zz/Oxygen/releases/)
+- For a full installation, run Oxygen_1.x.x_Setup.exe.
+- For a portable installation, download Oxygen_1.x.x_Portable.zip.
+
 ---
 
-## ⚡ Quick Start
+## ⚡ Compiling
 
 ### Method 1 — Run with Python
 
@@ -78,8 +81,6 @@ yt-dlp supports **1000+ websites** out of the box. Below are some of the most po
    ```
    python oxygen.py
    ```
-
----
 
 ### Method 2 — Build a Windows EXE 📦
 
@@ -130,34 +131,6 @@ Any key from `BUILTIN_EN` in `oxygen.py` can be overridden.
 
 ---
 
-## 📂 Project Structure
-
-```
-oxygen_project/
-├── oxygen.py           ← main application
-├── build.bat           ← Windows EXE builder
-├── requirements.txt
-├── ffmpeg.exe          ← place here (downloaded separately)
-├── oxygen.ico          ← app icon (optional)
-└── oxygen.png          ← logo shown in-app (optional)
-```
-
-After building:
-
-```
-dist/Oxygen/
-├── Oxygen.exe          ← run this
-├── ffmpeg.exe          ← auto-copied if present
-└── (other bundled files)
-```
-
----
-
-> [!NOTE]
-> Controls update automatically based on the selected mode. ffmpeg must be present for video+audio merging and audio-only extraction.
-
----
-
 <!-- ╔══════════════════════════════════════════════════╗ -->
 <!--                  CREDITS BANNER                      -->
 <!-- ╚══════════════════════════════════════════════════╝ -->
@@ -173,7 +146,6 @@ dist/Oxygen/
 | [FFmpeg](https://ffmpeg.org/) | Media processing & format conversion |
 | [Python](https://www.python.org/) | The language that powers the app |
 | [PyInstaller](https://pyinstaller.org/) | Windows EXE packaging |
-| [Claude AI](https://claude.ai/) | AI pair programming & development assistance |
 
 <br/>
 
